@@ -1,64 +1,52 @@
 {
-  "name": "kinds-agent",
-  "productName": "Kind's agent",
-  "version": "0.7.0",
+  "name": "whatsapp-summarizer",
+  "version": "0.1.0",
+  "description": "Local-first WhatsApp chat summarizer with pluggable AI providers",
+  "main": "dist/main/index.js",
   "private": true,
-  "description": "Local-first WhatsApp summarizer desktop app for friends",
-  "main": "app/main/main.js",
-  "author": "Noam Ofek",
   "scripts": {
-    "start": "electron .",
-    "dist": "electron-builder",
-    "dist:win": "electron-builder --win nsis portable",
-    "dist:mac": "electron-builder --mac dmg",
-    "dist:linux": "electron-builder --linux AppImage"
+    "dev": "electron-forge start",
+    "build": "tsc && electron-forge make",
+    "package": "electron-forge package",
+    "make": "electron-forge make",
+    "lint": "eslint src/ --ext .ts,.tsx",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:e2e": "playwright test",
+    "db:migrate": "tsx scripts/migrate.ts"
   },
   "dependencies": {
-    "baileys": "latest",
-    "better-sqlite3": "^11.10.0",
-    "openai": "^4.91.1",
-    "qrcode": "^1.5.4"
+    "@whiskeysockets/baileys": "^6.7.16",
+    "better-sqlite3": "^11.7.0",
+    "electron-store": "^10.0.0",
+    "qrcode": "^1.5.4",
+    "zod": "^3.24.2"
   },
   "devDependencies": {
-    "@electron/rebuild": "^3.7.2",
-    "electron": "^30.5.1",
-    "electron-builder": "^25.1.8"
+    "@anthropic-ai/sdk": "^0.39.0",
+    "@electron-forge/cli": "^7.6.0",
+    "@electron-forge/maker-dmg": "^7.6.0",
+    "@electron-forge/maker-zip": "^7.6.0",
+    "@electron-forge/plugin-vite": "^7.6.0",
+    "@playwright/test": "^1.49.1",
+    "@types/better-sqlite3": "^7.6.12",
+    "@types/node": "^22.10.5",
+    "@types/qrcode": "^1.5.5",
+    "@types/react": "^19.0.7",
+    "@types/react-dom": "^19.0.3",
+    "@typescript-eslint/eslint-plugin": "^8.19.1",
+    "@typescript-eslint/parser": "^8.19.1",
+    "electron": "^34.0.0",
+    "eslint": "^9.18.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.3",
+    "vite": "^6.0.7",
+    "vitest": "^3.0.4"
   },
-  "build": {
-    "appId": "com.noamofek.kindsagent",
-    "productName": "Kind's agent",
-    "directories": {
-      "buildResources": "build",
-      "output": "release"
-    },
-    "files": [
-      "app/**/*",
-      "package.json"
-    ],
-    "asar": true,
-    "mac": {
-      "target": [
-        "dmg"
-      ],
-      "category": "public.app-category.productivity"
-    },
-    "win": {
-      "target": [
-        "nsis",
-        "portable"
-      ]
-    },
-    "linux": {
-      "target": [
-        "AppImage"
-      ],
-      "category": "Utility"
-    },
-    "nsis": {
-      "oneClick": true,
-      "perMachine": false,
-      "allowToChangeInstallationDirectory": false,
-      "shortcutName": "Kind's agent"
-    }
+  "engines": {
+    "node": ">=20.0.0"
   }
 }
