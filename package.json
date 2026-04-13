@@ -1,0 +1,64 @@
+{
+  "name": "kinds-agent",
+  "productName": "Kind's agent",
+  "version": "0.7.0",
+  "private": true,
+  "description": "Local-first WhatsApp summarizer desktop app for friends",
+  "main": "app/main/main.js",
+  "author": "Noam Ofek",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder",
+    "dist:win": "electron-builder --win nsis portable",
+    "dist:mac": "electron-builder --mac dmg",
+    "dist:linux": "electron-builder --linux AppImage"
+  },
+  "dependencies": {
+    "baileys": "latest",
+    "better-sqlite3": "^11.10.0",
+    "openai": "^4.91.1",
+    "qrcode": "^1.5.4"
+  },
+  "devDependencies": {
+    "@electron/rebuild": "^3.7.2",
+    "electron": "^30.5.1",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "com.noamofek.kindsagent",
+    "productName": "Kind's agent",
+    "directories": {
+      "buildResources": "build",
+      "output": "release"
+    },
+    "files": [
+      "app/**/*",
+      "package.json"
+    ],
+    "asar": true,
+    "mac": {
+      "target": [
+        "dmg"
+      ],
+      "category": "public.app-category.productivity"
+    },
+    "win": {
+      "target": [
+        "nsis",
+        "portable"
+      ]
+    },
+    "linux": {
+      "target": [
+        "AppImage"
+      ],
+      "category": "Utility"
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": false,
+      "shortcutName": "Kind's agent"
+    }
+  }
+}
