@@ -111,6 +111,20 @@ const api = {
     },
   },
 
+  // ── System ───────────────────────────────────────────────
+  system: {
+    onModelPullProgress: (
+      callback: (data: { model: string; status: string; progress: number }) => void
+    ): (() => void) => {
+      const handler = (
+        _event: Electron.IpcRendererEvent,
+        data: { model: string; status: string; progress: number }
+      ) => callback(data);
+      ipcRenderer.on('event:model-pull-progress', handler);
+      return () => ipcRenderer.removeListener('event:model-pull-progress', handler);
+    },
+  },
+
   // ── Providers ────────────────────────────────────────────
   providers: {
     list: (): Promise<ProviderConfig[]> =>
