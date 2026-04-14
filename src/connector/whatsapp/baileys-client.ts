@@ -53,7 +53,7 @@ export class BaileysClient extends EventEmitter<BaileysClientEvents> {
       // version (1027934701) that WhatsApp rejects with 405. See:
       // https://github.com/WhiskeySockets/Baileys/issues/2376
       version: [2, 3000, 1034074495],
-      syncFullHistory: false,
+      syncFullHistory: true,
     });
 
     this.socket = socket;
