@@ -296,21 +296,37 @@ export class BaileysClient extends EventEmitter<BaileysClientEvents> {
 
   private normalizeMessage(msg: WAMessage): ChatMessage | null {
     const m = msg.message;
-    const body =
-      m?.conversation ||
-      m?.extendedTextMessage?.text ||
-      m?.imageMessage?.caption ||
-      m?.videoMessage?.caption ||
-      m?.documentMessage?.caption ||
-      m?.documentMessage?.fileName ||
-      m?.listResponseMessage?.title ||
-      m?.buttonsResponseMessage?.selectedDisplayText ||
-      null;
-
-    if (!body) return null;
+    if (!m) return null;
 
     const chatId = msg.key.remoteJid;
     if (!chatId) return null;
+
+    // Skip protocol/system messages
+    if (msg.messageStubType) return null;
+
+    // Extract text body — prefer actual text, fall back to media placeholders
+    const body =
+      m.conversation ||
+      m.extendedTextMessage?.text ||
+      m.imageMessage?.caption ||
+      m.videoMessage?.caption ||
+      m.documentMessage?.caption ||
+      m.documentMessage?.fileName ||
+      m.listResponseMessage?.title ||
+      m.buttonsResponseMessage?.selectedDisplayText ||
+      // Media placeholders — stored so message counts are accurate
+      (m.imageMessage ? '[Image]' : null) ||
+      (m.videoMessage ? '[Video]' : null) ||
+      (m.audioMessage ? '[Voice note]' : null) ||
+      (m.stickerMessage ? '[Sticker]' : null) ||
+      (m.documentMessage ? '[Document]' : null) ||
+      (m.contactMessage ? '[Contact]' : null) ||
+      (m.locationMessage ? '[Location]' : null) ||
+      (m.reactionMessage ? null : null) || // Skip reactions — they're not real messages
+      (m.protocolMessage ? null : null) || // Skip protocol messages
+      null;
+
+    if (!body) return null;
 
     return {
       id: msg.key.id ?? `${Date.now()}-${Math.random()}`,
