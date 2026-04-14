@@ -52,9 +52,8 @@ export class BaileysClient extends EventEmitter<BaileysClientEvents> {
 
     const socket = makeWASocket({
       auth: state,
-      printQRInTerminal: false,
-      browser: ['WhatsApp Summarizer', 'Desktop', '1.0.0'],
-      // Reduce noise: only sync recent messages
+      printQRInTerminal: true,
+      browser: baileys.Browsers?.ubuntu('Desktop') ?? ['WhatsApp Summarizer', 'Desktop', '2.0.0'],
       syncFullHistory: false,
     });
 
@@ -62,9 +61,11 @@ export class BaileysClient extends EventEmitter<BaileysClientEvents> {
 
     // ── Connection updates ─────────────────────────────────
     socket.ev.on('connection.update', (update) => {
+      console.log('[BAILEYS] connection.update:', JSON.stringify(update));
       const { connection, lastDisconnect, qr } = update;
 
       if (qr) {
+        console.log('[BAILEYS] QR received, length:', qr.length);
         // Generate QR as SVG string (no canvas/native deps needed)
         QRCode.toString(qr, { type: 'svg', margin: 2 })
           .then((svg: string) => {
