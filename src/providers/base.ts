@@ -67,7 +67,7 @@ Produce a JSON response with exactly this structure:
     }
   ],
   "expectedFromMe": [
-    "Explicit or implicit expectation on the reader / user"
+    "Things explicitly requested from ME (the person reading this summary)"
   ],
   "risks": [
     "Blockers, confusion, delays, or issues raised"
@@ -84,17 +84,27 @@ Rules:
 - Preserve the original language of the conversation in all output.
 - Be concise but complete. Do not invent information not present in the conversation.
 
+CRITICAL — Understand intent, not just text:
+WhatsApp conversations often include PASTED/FORWARDED content that is NOT part of the conversation itself. You MUST recognize these patterns:
+- Someone pastes a draft message they plan to send to someone else, then asks "can I send?", "what do you think?", "approve?" → The pasted content is a DRAFT FOR REVIEW. The actual conversation is about approving the draft. Do NOT extract action items or expectations from the draft's content.
+- Someone forwards a message from another chat → The forwarded content is CONTEXT, not an action item.
+- Someone shares a screenshot or long text block followed by a short reaction → The block is SHARED CONTENT, the reaction is the real conversation.
+- When someone says "sent!" after sharing a draft → The action is ALREADY DONE, not pending.
+
 Action items — STRICT rules:
-- ONLY extract action items that someone in the conversation EXPLICITLY committed to, was asked to do, or was assigned.
-- A real action item sounds like: "I'll do X", "Can you handle Y?", "Let's schedule Z", "Please send the report by Friday".
-- Do NOT extract action items from quoted, forwarded, or draft messages that someone shared for review or approval. If someone says "here's what I plan to send" or shares a screenshot/draft, the CONTENT of that draft is NOT an action item — the action is "review/approve the draft" at most.
+- ONLY extract action items that someone in the conversation EXPLICITLY committed to, was directly asked to do, or was assigned.
+- A real action item: "I'll do X", "Can you handle Y?", "Please send the report by Friday".
+- NOT an action item: content inside a pasted draft, text from a forwarded message, things mentioned in passing, things already completed ("sent!", "done!", "handled").
 - Do NOT infer tasks that were never discussed. If no one asked for it, it's not an action item.
-- When in doubt, leave it out. Fewer accurate items are better than many hallucinated ones.
+- When in doubt, leave it out. Fewer accurate items are far better than hallucinated ones.
 - Attribute to specific people when possible. Set priority based on urgency/importance. Use null if unclear.
 
-Expected from me:
-- Only include expectations that were DIRECTLY stated or clearly implied toward the reader.
-- Do not fabricate expectations from tangential context or from content inside shared/forwarded/quoted messages.
+expectedFromMe — STRICT rules:
+- "Me" is the person READING this summary (the app user). They may or may not be a participant in the conversation.
+- ONLY include things that were explicitly directed at the reader or that the reader clearly needs to act on.
+- If someone in the group asks another specific person to do something, that is NOT "expected from me" unless "me" is that specific person.
+- General group requests like "everyone please..." or tasks clearly waiting on the reader qualify.
+- When in doubt, return an empty array. Do not guess.
 
 Risks:
 - Highlight any blockers, sources of confusion, potential delays, or misalignments.
