@@ -7,7 +7,9 @@ const config: ForgeConfig = {
   packagerConfig: {
     name: 'WhatsApp Summarizer',
     appBundleId: 'com.local.whatsapp-summarizer',
-    asar: true,
+    asar: {
+      unpack: '**/{*.node,*.dll,*.so,*.dylib}',
+    },
   },
   makers: [
     new MakerZIP({}, ['darwin']),
