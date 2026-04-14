@@ -1,6 +1,7 @@
 import { app, BrowserWindow, session } from 'electron';
 import path from 'node:path';
 import { registerIpcHandlers, closeDb } from './ipc-handlers';
+import { startOllama, stopOllama } from './ollama-manager';
 
 // Enforce single instance — WhatsApp only allows one connection per device.
 const gotLock = app.requestSingleInstanceLock();
@@ -11,6 +12,9 @@ if (!gotLock) {
 let mainWindow: BrowserWindow | null = null;
 
 function createWindow(): void {
+  // Auto-start Ollama if installed
+  startOllama();
+
   mainWindow = new BrowserWindow({
     width: 1200,
     height: 800,
@@ -87,6 +91,7 @@ function createWindow(): void {
 app.whenReady().then(createWindow);
 
 app.on('window-all-closed', () => {
+  stopOllama();
   try { closeDb(); } catch { /* DB may not have been initialized */ }
   app.quit();
 });
