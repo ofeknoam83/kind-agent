@@ -75,21 +75,22 @@ export function Dashboard({ chats, connectionState, onNavigateToChat, revision =
 
   // ── Derived data ──────────────────────────────────────────
 
-  // All action items with their associated chat info
-  const allActionItemsWithChat: { item: ActionItem; chatId: string }[] = recentSummaries.flatMap(
-    (s) => s.actionItems.map((item) => ({ item, chatId: s.chatId }))
+  // All action items with their associated chat info and summary context
+  const allActionItemsWithChat: { item: ActionItem; chatId: string; tldr: string; tone: string }[] = recentSummaries.flatMap(
+    (s) => s.actionItems.map((item) => ({ item, chatId: s.chatId, tldr: s.tldr || s.summary, tone: s.tone }))
   );
 
-  // Critical alerts: high-priority action items
+  // Critical alerts: high-priority action items with context
   const criticalAlerts = allActionItemsWithChat.filter((a) => a.item.priority === 'high');
 
-  // What people need from me: all expectedFromMe items
-  const expectedFromMe: { text: string; chatId: string; chatNameStr: string }[] =
+  // What people need from me: all expectedFromMe items with context
+  const expectedFromMe: { text: string; chatId: string; chatNameStr: string; tldr: string }[] =
     recentSummaries.flatMap((s) =>
       s.expectedFromMe.map((text) => ({
         text,
         chatId: s.chatId,
         chatNameStr: chatName(s.chatId),
+        tldr: s.tldr || s.summary,
       }))
     );
 
@@ -278,9 +279,34 @@ export function Dashboard({ chats, connectionState, onNavigateToChat, revision =
           >
             Critical Alerts
           </h3>
-          {criticalAlerts.map((a, i) =>
-            renderActionItem(a.item, a.chatId, i, true)
-          )}
+          {criticalAlerts.map((a, i) => (
+            <div key={i} style={{ marginBottom: i < criticalAlerts.length - 1 ? 14 : 0 }}>
+              {/* Context: what happened */}
+              <div
+                style={{
+                  fontSize: 12,
+                  color: 'var(--text-secondary)',
+                  marginBottom: 6,
+                  lineHeight: 1.5,
+                  background: 'rgba(231, 76, 60, 0.06)',
+                  padding: '6px 10px',
+                  borderRadius: 6,
+                }}
+              >
+                <span
+                  style={{ color: 'var(--accent)', fontWeight: 500, cursor: 'pointer' }}
+                  onClick={() => onNavigateToChat(a.chatId)}
+                >
+                  {chatName(a.chatId)}
+                </span>
+                {a.tldr && (
+                  <span> — {a.tldr.length > 150 ? a.tldr.slice(0, 150) + '...' : a.tldr}</span>
+                )}
+              </div>
+              {/* The action item */}
+              {renderActionItem(a.item, a.chatId, i, false)}
+            </div>
+          ))}
         </div>
       )}
 
@@ -319,7 +345,7 @@ export function Dashboard({ chats, connectionState, onNavigateToChat, revision =
                 }}
               >
                 <span style={{ color: '#f39c12', flexShrink: 0 }}>{'\u25B8'}</span>
-                <div style={{ userSelect: 'text' }}>
+                <div style={{ userSelect: 'text', flex: 1 }}>
                   <span
                     style={{
                       fontSize: 11,
@@ -333,6 +359,11 @@ export function Dashboard({ chats, connectionState, onNavigateToChat, revision =
                     [{item.chatNameStr}]
                   </span>
                   <span style={{ color: 'var(--text-primary)' }}>{item.text}</span>
+                  {item.tldr && (
+                    <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 3, fontStyle: 'italic' }}>
+                      Context: {item.tldr.length > 120 ? item.tldr.slice(0, 120) + '...' : item.tldr}
+                    </div>
+                  )}
                 </div>
               </div>
             ))}
