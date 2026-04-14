@@ -181,9 +181,11 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
         messageCount: messages.length,
       });
 
+      const targetChat = chatRepo.listChats().find((c) => c.id === payload.chatId);
       const result = await provider.summarize({
         messages,
-        chatName: chatRepo.listChats().find((c) => c.id === payload.chatId)?.name ?? 'Unknown',
+        chatName: targetChat?.name ?? 'Unknown',
+        isGroup: targetChat?.isGroup ?? payload.chatId.endsWith('@g.us'),
         previousSummary: latestSummary?.summary,
       });
 

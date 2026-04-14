@@ -56,6 +56,7 @@ export class Router {
       const result = await provider.summarize({
         messages: input.messages,
         chatName: input.chatName,
+        isGroup: false,
       });
 
       const latencyMs = Date.now() - startMs;
@@ -178,6 +179,7 @@ export class Router {
       const result = await provider.summarize({
         messages: input.messages,
         chatName: input.chatName,
+        isGroup: false,
       });
 
       const latencyMs = Date.now() - startMs;

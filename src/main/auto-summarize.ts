@@ -111,9 +111,11 @@ async function runAutoSummarize(
           auto: true,
         });
 
+        const chatData = allChats.find((c) => c.id === chatId);
         const result = await provider.summarize({
           messages,
           chatName,
+          isGroup: chatData?.isGroup ?? chatId.endsWith('@g.us'),
           previousSummary: latestSummary?.summary,
         });
 
