@@ -82,7 +82,7 @@ function runMigrations(database: Database.Database): void {
     INSERT OR IGNORE INTO provider_configs (type, label, base_url, model, active) VALUES
       ('openai',   'OpenAI',    'https://api.openai.com/v1',    'gpt-4o',        0),
       ('lmstudio', 'LM Studio', 'http://localhost:1234/v1',     'default',       0),
-      ('ollama',   'Ollama',    'http://localhost:11434',        'llama3.2:8b',   1);
+      ('ollama',   'Ollama',    'http://localhost:11434',        'llama3.2',      1);
   `);
 }
 
