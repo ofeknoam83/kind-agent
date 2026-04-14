@@ -181,9 +181,11 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
         messageCount: messages.length,
       });
 
+      const targetChat = chatRepo.listChats().find((c) => c.id === payload.chatId);
       const result = await provider.summarize({
         messages,
-        chatName: chatRepo.listChats().find((c) => c.id === payload.chatId)?.name ?? 'Unknown',
+        chatName: targetChat?.name ?? 'Unknown',
+        isGroup: targetChat?.isGroup ?? payload.chatId.endsWith('@g.us'),
         previousSummary: latestSummary?.summary,
       });
 
@@ -196,6 +198,15 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
         messageCount: messages.length,
         timeRange: [Math.min(...timestamps), Math.max(...timestamps)],
       });
+
+      // Auto-categorize: if chat has no category, use LLM suggestion
+      const VALID_CATEGORIES = new Set(['School', 'Kindergarten', 'Work', 'Family', 'Friends', 'Other']);
+      if (result.suggestedCategory && VALID_CATEGORIES.has(result.suggestedCategory)) {
+        const chat = chatRepo.listChats().find((c) => c.id === payload.chatId);
+        if (chat && !chat.category) {
+          chatRepo.setCategory(payload.chatId, result.suggestedCategory);
+        }
+      }
 
       mainWindow.webContents.send(IpcEvents.SUMMARIZE_PROGRESS, {
         chatId: payload.chatId,

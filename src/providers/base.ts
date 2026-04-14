@@ -20,6 +20,8 @@ export interface SummarizeInput {
   messages: ChatMessage[];
   /** Name of the chat for context. */
   chatName: string;
+  /** Whether this is a group chat. */
+  isGroup: boolean;
   /** Previous summary to build on (incremental summarization). */
   previousSummary?: string;
 }
@@ -35,6 +37,7 @@ export interface SummarizeOutput {
   risks: string[];
   usefulContext: string[];
   tone: string;
+  suggestedCategory: string;
 }
 
 /**
@@ -75,7 +78,8 @@ Produce a JSON response with exactly this structure:
   "usefulContext": [
     "Background info, links, references only if needed"
   ],
-  "tone": "Overall tone/sentiment of the conversation and any notable emotional signals"
+  "tone": "Overall tone/sentiment of the conversation and any notable emotional signals",
+  "suggestedCategory": "Work | School | Kindergarten | Family | Friends | Other"
 }
 
 Rules:
@@ -115,13 +119,44 @@ Risks:
 - Highlight any blockers, sources of confusion, potential delays, or misalignments.
 
 Tone:
-- Describe the overall sentiment (e.g. "Collaborative and upbeat", "Tense, with frustration from X about Y").`;
+- Describe the overall sentiment (e.g. "Collaborative and upbeat", "Tense, with frustration from X about Y").
+
+suggestedCategory — IMPORTANT:
+Classify this conversation into exactly ONE of: Work, School, Kindergarten, Family, Friends, Other.
+Use ALL available signals: the chat name, whether it's a group or 1:1, participant names, language, and conversation content.
+
+Category definitions:
+- Work = professional context. Projects, clients, business discussions, colleagues, team coordination, product development, campaigns, sales, marketing, technical issues.
+- School = children's SCHOOL (בית ספר). Parents groups, teacher communication, homework, school events, class WhatsApp groups. Hebrew signals: "הורים כיתה", "בית ספר", "מורה", class names.
+- Kindergarten = children's DAYCARE / KINDERGARTEN (גן / גן ילדים). Parents groups for gan, ganenet communication. Hebrew signals: "הורים גן", "גן ילדים", "גננת", "גן" in the chat name.
+- Family = family members. Personal family matters, family group chats. Hebrew signals: "משפחה", "אמא", "אבא", names of family members in intimate context.
+- Friends = social/personal. Casual conversations with friends, social plans, personal chats. Informal tone, non-professional.
+- Other = doesn't clearly fit any above.
+
+Strong signals to use:
+1. Chat name is the STRONGEST signal. A chat named "Team-GMB" or "צוות מכירות" = Work. "הורים גן 2 רבין" = Kindergarten. "משפחת כהן" = Family.
+2. For 1:1 chats, use the conversation CONTENT: discussing projects/clients = Work, discussing kids' school = School, personal catch-up = Friends.
+3. Hebrew keywords: צוות/team = Work, פרויקט/project = Work, לקוח/client = Work, הורים/parents + school context = School/Kindergarten, גן = Kindergarten, בית ספר = School.
+4. When unsure between two categories, prefer the more specific one (School over Other, Work over Friends).`;
 
 /**
  * Format a message array into a transcript string for the LLM.
+ * Includes metadata to help with categorization.
  */
-export function formatTranscript(messages: ChatMessage[], chatName: string): string {
-  const header = `Chat: ${chatName}\nMessages: ${messages.length}\n---\n`;
+export function formatTranscript(messages: ChatMessage[], chatName: string, isGroup = false): string {
+  // Extract unique participants (excluding "me")
+  const participants = [...new Set(
+    messages.filter((m) => !m.fromMe).map((m) => m.senderName)
+  )];
+
+  const headerParts = [
+    `Chat name: "${chatName}"`,
+    `Type: ${isGroup ? 'Group chat' : '1:1 private chat'}`,
+    `Participants: ${participants.length > 0 ? participants.slice(0, 20).join(', ') : 'Unknown'}`,
+    `Messages: ${messages.length}`,
+  ];
+  const header = headerParts.join('\n') + '\n---\n';
+
   const lines = messages.map(
     (m) => `[${new Date(m.timestamp * 1000).toISOString()}] ${m.senderName}: ${m.body}`
   );
@@ -179,5 +214,6 @@ export function parseProviderResponse(raw: string): SummarizeOutput {
     risks: Array.isArray(parsed.risks) ? parsed.risks.map(String) : [],
     usefulContext: Array.isArray(parsed.usefulContext) ? parsed.usefulContext.map(String) : [],
     tone: String(parsed.tone ?? ''),
+    suggestedCategory: String(parsed.suggestedCategory ?? 'Other'),
   };
 }

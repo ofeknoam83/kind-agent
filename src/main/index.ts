@@ -1,7 +1,7 @@
 import { app, BrowserWindow, session } from 'electron';
 import path from 'node:path';
 import { registerIpcHandlers, closeDb, ensureRepos } from './ipc-handlers';
-import { startOllama, stopOllama } from './ollama-manager';
+import { startOllama, stopOllama, ensureModel } from './ollama-manager';
 import { startAutoSummarize, stopAutoSummarize } from './auto-summarize';
 
 // Enforce single instance — WhatsApp only allows one connection per device.
@@ -14,7 +14,7 @@ let mainWindow: BrowserWindow | null = null;
 
 function createWindow(): void {
   // Auto-start Ollama if installed
-  startOllama();
+  const ollamaAvailable = startOllama();
 
   mainWindow = new BrowserWindow({
     width: 1200,
@@ -107,6 +107,13 @@ function createWindow(): void {
     mainWindow.loadFile(
       path.join(__dirname, `../renderer/${MAIN_WINDOW_VITE_NAME}/index.html`)
     );
+  }
+
+  // Auto-pull model in background after window is ready
+  if (ollamaAvailable) {
+    ensureModel('llama3.2', mainWindow).catch((err) => {
+      console.error('[OLLAMA] Auto model pull failed:', err);
+    });
   }
 }
 

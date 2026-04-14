@@ -32,7 +32,7 @@ export class OllamaProvider implements SummarizationProvider {
   }
 
   async summarize(input: SummarizeInput): Promise<SummarizeOutput> {
-    const transcript = formatTranscript(input.messages, input.chatName);
+    const transcript = formatTranscript(input.messages, input.chatName, input.isGroup);
 
     const userMessage = input.previousSummary
       ? `Previous summary for context:\n${input.previousSummary}\n\n---\n\nNew messages to summarize:\n${transcript}`
