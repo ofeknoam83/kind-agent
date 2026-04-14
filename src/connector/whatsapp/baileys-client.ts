@@ -137,9 +137,16 @@ export class BaileysClient extends EventEmitter<BaileysClientEvents> {
       }
 
       // Emit chat metadata with actual names
-      // Log first few chats to debug name resolution
-      for (const chat of event.chats.slice(0, 5)) {
-        console.log(`[BAILEYS] Chat debug: id=${chat.id}, name=${chat.name}, subject=${(chat as any).subject}, convTs=${chat.conversationTimestamp}`);
+      // Debug: log raw chat object keys to find where names are stored
+      if (event.chats.length > 0) {
+        const sample = event.chats[0];
+        console.log(`[BAILEYS] Chat object keys: ${Object.keys(sample).join(', ')}`);
+        console.log(`[BAILEYS] Chat sample (first): ${JSON.stringify(sample).slice(0, 500)}`);
+        // Also check a group if available
+        const groupSample = event.chats.find((c: any) => c.id?.endsWith('@g.us'));
+        if (groupSample) {
+          console.log(`[BAILEYS] Group sample: ${JSON.stringify(groupSample).slice(0, 500)}`);
+        }
       }
 
       for (const chat of event.chats) {
