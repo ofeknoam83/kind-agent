@@ -34,6 +34,8 @@ function CategoryPicker({
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const [dropdownPos, setDropdownPos] = useState<{ top: number; left: number } | null>(null);
 
   // Close dropdown on outside click
   useEffect(() => {
@@ -52,8 +54,13 @@ function CategoryPicker({
     setSaving(true);
     setOpen(false);
     try {
-      await api.chats.setCategory(chatId, cat);
+      const result = await api.chats.setCategory(chatId, cat);
+      if (result && 'error' in result) {
+        console.error('[CategoryPicker] Failed to set category:', result.error);
+      }
       onCategoryChanged?.();
+    } catch (err) {
+      console.error('[CategoryPicker] Error:', err);
     } finally {
       setSaving(false);
     }
@@ -65,7 +72,14 @@ function CategoryPicker({
     <div ref={dropdownRef} style={{ position: 'relative', display: 'inline-block' }}>
       {/* Badge / trigger button */}
       <button
-        onClick={() => setOpen(!open)}
+        ref={buttonRef}
+        onClick={() => {
+          if (!open && buttonRef.current) {
+            const rect = buttonRef.current.getBoundingClientRect();
+            setDropdownPos({ top: rect.bottom + 4, left: rect.left });
+          }
+          setOpen(!open);
+        }}
         disabled={saving}
         style={{
           background: currentCategory ? `${badgeColor}22` : 'rgba(255,255,255,0.06)',
@@ -97,19 +111,18 @@ function CategoryPicker({
         <span style={{ fontSize: 8, marginLeft: 2 }}>{open ? '\u25B2' : '\u25BC'}</span>
       </button>
 
-      {/* Dropdown */}
-      {open && (
+      {/* Dropdown — uses fixed positioning to avoid overflow:hidden clipping */}
+      {open && dropdownPos && (
         <div
           style={{
-            position: 'absolute',
-            top: '100%',
-            left: 0,
-            marginTop: 4,
+            position: 'fixed',
+            top: dropdownPos.top,
+            left: dropdownPos.left,
             background: '#1a1a1a',
             border: '1px solid var(--border)',
             borderRadius: 10,
             padding: 4,
-            zIndex: 100,
+            zIndex: 10000,
             minWidth: 140,
             boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
           }}

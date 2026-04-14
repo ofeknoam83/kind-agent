@@ -378,17 +378,17 @@ export function Dashboard({
     return { config, summaries };
   }).filter((c) => c.summaries.length > 0);
 
-  // Uncategorized goes at the end
+  // Uncategorized: show EACH chat as its own card (never mix different chats)
   const uncategorizedSummaries = summariesByCategory.get('Uncategorized') ?? [];
-  if (uncategorizedSummaries.length > 0) {
+  for (const s of uncategorizedSummaries) {
     categoryCards.push({
       config: {
-        label: 'Uncategorized',
+        label: chatNameById(s.chatId),
         color: '#888',
         icon: '\u{1F4AC}',
-        keys: ['Uncategorized'],
+        keys: [],
       },
-      summaries: uncategorizedSummaries,
+      summaries: [s],
     });
   }
 
