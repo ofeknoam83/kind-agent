@@ -47,6 +47,23 @@ export interface ActionItem {
   deadline: string | null;
   /** Priority level */
   priority: 'high' | 'medium' | 'low' | null;
+  /** LLM self-assessed confidence (1=speculative, 3=reasonable, 5=explicit) */
+  confidence?: number;
+}
+
+/** Action item persisted in the action_items table with status tracking. */
+export interface TrackedActionItem {
+  id: number;
+  summaryId: number | null;
+  chatId: string;
+  description: string;
+  assignee: string | null;
+  deadline: string | null;
+  priority: 'high' | 'medium' | 'low' | null;
+  confidence: number;
+  status: 'open' | 'done' | 'dismissed';
+  createdAt: number;
+  resolvedAt: number | null;
 }
 
 /** Extra structured data stored alongside a summary (persisted as JSON). */

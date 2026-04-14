@@ -158,6 +158,7 @@ export function App() {
                 chats={chatState.chats}
                 connectionState={connection.state}
                 onNavigateToChat={navigateToChat}
+                onRefresh={chatState.refreshChats}
                 revision={chatState.revision}
               />
             )}

@@ -8,6 +8,7 @@ import type {
   ProviderConfig,
   ProviderStatus,
   SummaryResult,
+  TrackedActionItem,
 } from '../shared/types';
 
 /**
@@ -112,6 +113,29 @@ const api = {
       ipcRenderer.on(IpcEvents.SUMMARIZE_PROGRESS, handler);
       return () => ipcRenderer.removeListener(IpcEvents.SUMMARIZE_PROGRESS, handler);
     },
+  },
+
+  // ── Action Items ─────────────────────────────────────────
+  actionItems: {
+    list: (
+      sinceTimestamp?: number,
+      chatId?: string,
+      limit?: number
+    ): Promise<TrackedActionItem[]> =>
+      ipcRenderer.invoke(IpcChannels.ACTION_ITEMS_LIST, {
+        sinceTimestamp,
+        chatId,
+        limit: limit ?? 50,
+      }),
+
+    markDone: (id: number): Promise<{ success?: boolean; error?: string }> =>
+      ipcRenderer.invoke(IpcChannels.ACTION_ITEMS_MARK_DONE, { id }),
+
+    dismiss: (id: number): Promise<{ success?: boolean; error?: string }> =>
+      ipcRenderer.invoke(IpcChannels.ACTION_ITEMS_DISMISS, { id }),
+
+    dismissAll: (): Promise<{ success?: boolean; error?: string }> =>
+      ipcRenderer.invoke(IpcChannels.ACTION_ITEMS_DISMISS_ALL),
   },
 
   // ── System ───────────────────────────────────────────────

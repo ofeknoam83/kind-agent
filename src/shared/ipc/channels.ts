@@ -30,6 +30,12 @@ export const IpcChannels = {
   PROVIDERS_HEALTH: 'providers:health',
   PROVIDERS_SET_API_KEY: 'providers:set-api-key',
 
+  // ── Action Items ─────────────────────────────────────────
+  ACTION_ITEMS_LIST: 'action-items:list',
+  ACTION_ITEMS_MARK_DONE: 'action-items:mark-done',
+  ACTION_ITEMS_DISMISS: 'action-items:dismiss',
+  ACTION_ITEMS_DISMISS_ALL: 'action-items:dismiss-all',
+
   // ── Settings ─────────────────────────────────────────────
   SETTINGS_GET: 'settings:get',
   SETTINGS_SET: 'settings:set',
