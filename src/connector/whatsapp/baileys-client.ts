@@ -65,12 +65,16 @@ export class BaileysClient extends EventEmitter<BaileysClientEvents> {
       const { connection, lastDisconnect, qr } = update;
 
       if (qr) {
-        // Convert raw QR string to a scannable data URL
-        QRCode.toDataURL(qr, { width: 280, margin: 2 })
-          .then((url: string) => this.setState({ status: 'qr', qrData: url }))
+        // Generate QR as SVG string (no canvas/native deps needed)
+        QRCode.toString(qr, { type: 'svg', margin: 2 })
+          .then((svg: string) => {
+            // Convert SVG to a data URI the renderer can display in an <img>
+            const dataUrl = `data:image/svg+xml;base64,${Buffer.from(svg).toString('base64')}`;
+            this.setState({ status: 'qr', qrData: dataUrl });
+          })
           .catch((err: unknown) => {
             console.error('QR generation failed:', err);
-            this.setState({ status: 'qr', qrData: qr });
+            this.setState({ status: 'qr', qrData: '' });
           });
       }
 
