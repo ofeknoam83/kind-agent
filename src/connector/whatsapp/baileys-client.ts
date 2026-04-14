@@ -127,16 +127,16 @@ export class BaileysClient extends EventEmitter<BaileysClientEvents> {
         this.emit('messages', normalized);
       }
 
-      // Emit chat metadata (name, group status)
+      // Emit chat metadata with actual names (group name / contact name)
       for (const chat of event.chats) {
-        if (chat.id && chat.name) {
-          // Emit a synthetic message to register the chat in the DB
+        if (chat.id) {
+          const name = chat.name || chat.id.split('@')[0];
           this.emit('messages', [{
             id: `chat-meta-${chat.id}`,
             chatId: chat.id,
-            senderJid: 'system',
-            senderName: chat.name,
-            body: '', // Empty body — just registers the chat
+            senderJid: 'chat-meta',
+            senderName: name,
+            body: '',
             timestamp: chat.conversationTimestamp
               ? typeof chat.conversationTimestamp === 'number'
                 ? chat.conversationTimestamp

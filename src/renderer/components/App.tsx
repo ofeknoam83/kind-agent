@@ -18,15 +18,15 @@ export function App() {
       {/* macOS drag region */}
       <div className="titlebar-drag" />
 
-      {/* Top bar */}
+      {/* Top bar — sits below the 32px macOS drag region */}
       <header
         style={{
-          height: 48,
-          paddingTop: 32, // Below macOS titlebar
+          minHeight: 48,
+          marginTop: 32,
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
-          padding: '32px 16px 0 16px',
+          padding: '8px 16px',
           borderBottom: '1px solid var(--border)',
           background: 'var(--bg-secondary)',
           flexShrink: 0,
