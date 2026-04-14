@@ -126,6 +126,13 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     }
   });
 
+  ipcMain.handle(IpcChannels.CHATS_SET_CATEGORY, (_event, rawPayload: unknown) => {
+    return withValidation('chats:set-category', rawPayload, (payload) => {
+      ensureRepos().chatRepo.setCategory(payload.chatId, payload.category);
+      return { success: true };
+    });
+  });
+
   ipcMain.handle(IpcChannels.CHATS_GET_MESSAGES, (_event, rawPayload: unknown) => {
     return withValidation('chats:get-messages', rawPayload, (payload) => {
       return ensureRepos().chatRepo.getMessages(payload.chatId, payload.limit, payload.beforeTimestamp);
@@ -202,6 +209,12 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     });
   });
 
+  ipcMain.handle(IpcChannels.SUMMARIZE_RECENT, (_event, rawPayload: unknown) => {
+    return withValidation('summarize:recent', rawPayload, (payload) => {
+      return ensureRepos().summaryRepo.getRecentSummaries(payload.sinceTimestamp, payload.limit);
+    });
+  });
+
   // ── Providers ────────────────────────────────────────────
 
   ipcMain.handle(IpcChannels.PROVIDERS_LIST, () => {
@@ -250,8 +263,9 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
   });
 }
 
-// Re-export for app cleanup
+// Re-export for app cleanup and auto-summarize daemon
 export { closeDb };
+export { ensureRepos };
 
 // ── Validation helper ─────────────────────────────────────────────────
 

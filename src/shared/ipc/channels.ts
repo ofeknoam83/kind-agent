@@ -15,11 +15,13 @@ export const IpcChannels = {
   // ── Chats ────────────────────────────────────────────────
   CHATS_LIST: 'chats:list',
   CHATS_GET_MESSAGES: 'chats:get-messages',
+  CHATS_SET_CATEGORY: 'chats:set-category',
 
   // ── Summarization ────────────────────────────────────────
   SUMMARIZE_RUN: 'summarize:run',
   SUMMARIZE_LIST: 'summarize:list',
   SUMMARIZE_GET: 'summarize:get',
+  SUMMARIZE_RECENT: 'summarize:recent',
 
   // ── Provider management ──────────────────────────────────
   PROVIDERS_LIST: 'providers:list',
@@ -42,6 +44,7 @@ export const IpcEvents = {
   WHATSAPP_STATE_CHANGED: 'event:whatsapp-state-changed',
   NEW_MESSAGES: 'event:new-messages',
   SUMMARIZE_PROGRESS: 'event:summarize-progress',
+  AUTO_SUMMARIZE_COMPLETE: 'event:auto-summarize-complete',
 } as const;
 
 export type IpcEvent = (typeof IpcEvents)[keyof typeof IpcEvents];

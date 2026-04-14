@@ -38,6 +38,7 @@ function runMigrations(database: Database.Database): void {
       name        TEXT NOT NULL,
       is_group    INTEGER NOT NULL DEFAULT 0,
       last_msg_ts INTEGER NOT NULL DEFAULT 0,
+      category    TEXT DEFAULT NULL,
       created_at  INTEGER NOT NULL DEFAULT (unixepoch())
     );
 
@@ -91,6 +92,13 @@ function runMigrations(database: Database.Database): void {
   const hasExtraData = columns.some((col) => col.name === 'extra_data');
   if (!hasExtraData) {
     database.exec(`ALTER TABLE summaries ADD COLUMN extra_data TEXT NOT NULL DEFAULT '{}'`);
+  }
+
+  // Migration: add category column to chats for existing databases
+  const chatColumns = database.pragma('table_info(chats)') as Array<{ name: string }>;
+  const hasCategory = chatColumns.some((col) => col.name === 'category');
+  if (!hasCategory) {
+    database.exec(`ALTER TABLE chats ADD COLUMN category TEXT DEFAULT NULL`);
   }
 }
 

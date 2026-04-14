@@ -2,6 +2,7 @@ import { contextBridge, ipcRenderer } from 'electron';
 import { IpcChannels, IpcEvents } from '../shared/ipc';
 import type {
   Chat,
+  ChatCategory,
   ChatMessage,
   ConnectionState,
   ProviderConfig,
@@ -56,6 +57,12 @@ const api = {
         beforeTimestamp,
       }),
 
+    setCategory: (
+      chatId: string,
+      category: ChatCategory | null
+    ): Promise<{ success?: boolean; error?: string }> =>
+      ipcRenderer.invoke(IpcChannels.CHATS_SET_CATEGORY, { chatId, category }),
+
     onNewMessages: (callback: (messages: ChatMessage[]) => void): (() => void) => {
       const handler = (_event: Electron.IpcRendererEvent, messages: ChatMessage[]) =>
         callback(messages);
@@ -82,6 +89,15 @@ const api = {
 
     get: (id: number): Promise<SummaryResult | null> =>
       ipcRenderer.invoke(IpcChannels.SUMMARIZE_GET, { id }),
+
+    recent: (sinceTimestamp: number, limit?: number): Promise<SummaryResult[]> =>
+      ipcRenderer.invoke(IpcChannels.SUMMARIZE_RECENT, { sinceTimestamp, limit: limit ?? 50 }),
+
+    onAutoSummarizeComplete: (callback: () => void): (() => void) => {
+      const handler = () => callback();
+      ipcRenderer.on(IpcEvents.AUTO_SUMMARIZE_COMPLETE, handler);
+      return () => ipcRenderer.removeListener(IpcEvents.AUTO_SUMMARIZE_COMPLETE, handler);
+    },
 
     onProgress: (
       callback: (progress: { chatId: string; status: string; messageCount?: number }) => void

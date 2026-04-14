@@ -72,6 +72,15 @@ export class SummaryRepository {
     const row = this.stmts.getLatestForChat.get({ chatId }) as RawSummaryRow | undefined;
     return row ? deserializeRow(row) : null;
   }
+
+  /** Get all summaries created after a timestamp, across all chats. */
+  getRecentSummaries(sinceTimestamp: number, limit: number = 50): SummaryResult[] {
+    const stmt = this.db.prepare(`
+      SELECT * FROM summaries WHERE created_at > @sinceTs ORDER BY created_at DESC LIMIT @limit
+    `);
+    const rows = stmt.all({ sinceTs: sinceTimestamp, limit }) as RawSummaryRow[];
+    return rows.map(deserializeRow);
+  }
 }
 
 // ── Internal ──────────────────────────────────────────────────────────

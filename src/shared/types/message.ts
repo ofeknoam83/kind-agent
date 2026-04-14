@@ -16,6 +16,11 @@ export interface ChatMessage {
   fromMe: boolean;
 }
 
+/** Available chat categories for user tagging. */
+export type ChatCategory = 'School' | 'Kindergarten' | 'Work' | 'Family' | 'Friends' | 'Other';
+
+export const CHAT_CATEGORIES: ChatCategory[] = ['School', 'Kindergarten', 'Work', 'Family', 'Friends', 'Other'];
+
 export interface Chat {
   /** JID — unique WhatsApp chat identifier */
   id: string;
@@ -27,4 +32,6 @@ export interface Chat {
   lastMessageTimestamp: number;
   /** Total messages stored locally */
   messageCount: number;
+  /** User-assigned category tag */
+  category: ChatCategory | null;
 }
