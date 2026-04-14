@@ -180,13 +180,13 @@ export function SummaryPanel({ chatId }: Props) {
                     }}
                   />
                   <div style={{ userSelect: 'text' }}>
-                    {item.assignee && (
+                    {item.assignee && item.assignee !== 'null' && (
                       <span style={{ color: 'var(--accent)', fontWeight: 500 }}>
                         {item.assignee}:{' '}
                       </span>
                     )}
                     <span>{item.description}</span>
-                    {item.deadline && (
+                    {item.deadline && item.deadline !== 'null' && (
                       <span style={{ color: 'var(--text-secondary)', fontSize: 11 }}>
                         {' '}
                         (by {item.deadline})
