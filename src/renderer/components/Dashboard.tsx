@@ -330,7 +330,7 @@ export function Dashboard({ chats, connectionState, onNavigateToChat }: Props) {
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {chats.slice(0, 6).map((chat) => (
+            {[...chats].sort((a, b) => b.lastMessageTimestamp - a.lastMessageTimestamp).slice(0, 6).map((chat) => (
               <div
                 key={chat.id}
                 style={{

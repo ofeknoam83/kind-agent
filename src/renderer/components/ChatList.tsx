@@ -27,7 +27,9 @@ export function ChatList({ chats, selectedId, onSelect }: Props) {
           No chats yet. Connect to WhatsApp to see your conversations.
         </div>
       ) : (
-        chats.map((chat) => (
+        [...chats]
+          .sort((a, b) => b.lastMessageTimestamp - a.lastMessageTimestamp)
+          .map((chat) => (
           <button
             key={chat.id}
             onClick={() => onSelect(chat.id)}
