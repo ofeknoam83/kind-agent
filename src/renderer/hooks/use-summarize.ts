@@ -43,12 +43,16 @@ export function useSummarize(chatId: string | null) {
       setRunning(true);
       setError(null);
 
-      const result = await api.summarize.run(chatId, afterTimestamp, provider);
-      if ('error' in result) {
-        setError(result.error);
+      try {
+        const result = await api.summarize.run(chatId, afterTimestamp, provider);
+        if (result && 'error' in result) {
+          setError(result.error);
+          setRunning(false);
+        }
+      } catch (err) {
+        setError(err instanceof Error ? err.message : String(err));
         setRunning(false);
       }
-      // On success, the progress event will update state
     },
     [api, chatId]
   );

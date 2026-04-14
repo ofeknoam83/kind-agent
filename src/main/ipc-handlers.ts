@@ -49,9 +49,10 @@ function ensureBaileys(mainWindow: BrowserWindow) {
 
       for (const [chatId, msgs] of byChatId) {
         const maxTs = Math.max(...msgs.map((m) => m.timestamp));
-        // Find the best name for this chat (prefer non-system senders)
-        const chatName = msgs.find((m) => m.senderName && m.senderJid !== 'system')?.senderName
-          ?? msgs[0].senderName;
+        // Priority: chat-meta name > non-Unknown sender > fallback to JID
+        const metaMsg = msgs.find((m) => m.senderJid === 'chat-meta');
+        const namedMsg = msgs.find((m) => m.senderName && m.senderName !== 'Unknown' && m.senderJid !== 'chat-meta');
+        const chatName = metaMsg?.senderName ?? namedMsg?.senderName ?? chatId.split('@')[0];
         // Filter out empty-body metadata messages before storing
         const realMessages = msgs.filter((m) => m.body.length > 0);
         chatRepo.upsertChatWithMessages(
