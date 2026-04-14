@@ -48,8 +48,17 @@ function ensureBaileys(mainWindow: BrowserWindow) {
       }
 
       for (const [chatId, msgs] of byChatId) {
-        const maxTs = Math.max(...msgs.map((m) => m.timestamp));
         const isGroup = chatId.endsWith('@g.us');
+
+        // Compute last-message timestamp from REAL messages only.
+        // Metadata messages (chat-meta) carry name info, not reliable timestamps.
+        const realTimestamps = msgs
+          .filter((m) => m.senderJid !== 'chat-meta' && m.body.length > 0)
+          .map((m) => m.timestamp);
+        const metaTimestamp = msgs.find((m) => m.senderJid === 'chat-meta')?.timestamp ?? 0;
+        const maxTs = realTimestamps.length > 0
+          ? Math.max(...realTimestamps)
+          : metaTimestamp;
 
         // Only use authoritative name sources to avoid overwriting
         // group names with individual sender names

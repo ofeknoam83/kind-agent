@@ -100,6 +100,15 @@ function runMigrations(database: Database.Database): void {
   if (!hasCategory) {
     database.exec(`ALTER TABLE chats ADD COLUMN category TEXT DEFAULT NULL`);
   }
+
+  // Fix: recalculate last_msg_ts from actual message timestamps.
+  // Previous versions used Date.now() for metadata messages, which corrupted sort order.
+  database.exec(`
+    UPDATE chats SET last_msg_ts = COALESCE(
+      (SELECT MAX(timestamp) FROM messages WHERE messages.chat_id = chats.id),
+      0
+    )
+  `);
 }
 
 /**
