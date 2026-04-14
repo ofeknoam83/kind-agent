@@ -27,19 +27,32 @@ export function Dashboard({ chats, connectionState, onNavigateToChat }: Props) {
   );
   const isConnected = connectionState.status === 'connected';
 
-  // Load the most recent summary from any chat
+  // Load summaries from the last 2 hours across all chats
+  const [recentSummaries, setRecentSummaries] = useState<SummaryResult[]>([]);
+  const twoHoursAgo = Math.floor(Date.now() / 1000) - 2 * 3600;
+
   useEffect(() => {
     (async () => {
-      for (const chat of chats.slice(0, 10)) {
-        const summaries = await api.summarize.list(chat.id, 1);
-        if (summaries.length > 0) {
-          if (!latestSummary || summaries[0].createdAt > latestSummary.createdAt) {
-            setLatestSummary(summaries[0]);
+      const found: SummaryResult[] = [];
+      for (const chat of chats.slice(0, 20)) {
+        const summaries = await api.summarize.list(chat.id, 3);
+        for (const s of summaries) {
+          if (s.createdAt > twoHoursAgo) {
+            found.push(s);
           }
         }
       }
+      found.sort((a, b) => b.createdAt - a.createdAt);
+      setRecentSummaries(found);
+      if (found.length > 0 && (!latestSummary || found[0].createdAt > latestSummary.createdAt)) {
+        setLatestSummary(found[0]);
+      }
     })();
   }, [api, chats.length]);
+
+  // Aggregate action items from all recent summaries
+  const allActionItems = recentSummaries.flatMap((s) => s.actionItems);
+  const allUnresolved = recentSummaries.flatMap((s) => s.unresolvedQuestions);
 
   const quickSummarize = async (chatId: string, hours: number) => {
     setSummarizingChat(chatId);
@@ -119,11 +132,16 @@ export function Dashboard({ chats, connectionState, onNavigateToChat }: Props) {
           }}
         >
           {recentChats.length} chat{recentChats.length !== 1 ? 's' : ''} active in the last 24h
-          {latestSummary?.actionItems && latestSummary.actionItems.length > 0 && (
+          {recentSummaries.length > 0 && (
             <span>
               {' \u00b7 '}
-              {latestSummary.actionItems.length} action item
-              {latestSummary.actionItems.length !== 1 ? 's' : ''} surfaced
+              {recentSummaries.length} summar{recentSummaries.length !== 1 ? 'ies' : 'y'} in the last 2h
+            </span>
+          )}
+          {allActionItems.length > 0 && (
+            <span>
+              {' \u00b7 '}
+              {allActionItems.length} action{allActionItems.length !== 1 ? 's' : ''} surfaced
             </span>
           )}
         </div>
@@ -173,32 +191,42 @@ export function Dashboard({ chats, connectionState, onNavigateToChat }: Props) {
             <h3 style={{ fontSize: 15, fontWeight: 600 }}>What Matters</h3>
           </div>
 
-          {latestSummary ? (
-            <div>
-              <div
-                style={{
-                  fontSize: 13,
-                  lineHeight: 1.7,
-                  color: 'var(--text-primary)',
-                  userSelect: 'text',
-                  maxHeight: 200,
-                  overflow: 'hidden',
-                }}
-              >
-                {latestSummary.summary.length > 400
-                  ? latestSummary.summary.slice(0, 400) + '...'
-                  : latestSummary.summary}
-              </div>
-              <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 12 }}>
-                From{' '}
-                {chats.find((c) => c.id === latestSummary.chatId)?.name || 'Unknown chat'}
-                {' \u00b7 '}
-                {new Date(latestSummary.createdAt * 1000).toLocaleString()}
-              </div>
+          {recentSummaries.length > 0 ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              {recentSummaries.slice(0, 3).map((s, i) => (
+                <div key={i}>
+                  <div
+                    style={{
+                      fontSize: 12,
+                      fontWeight: 600,
+                      color: 'var(--accent)',
+                      marginBottom: 4,
+                      cursor: 'pointer',
+                    }}
+                    onClick={() => onNavigateToChat(s.chatId)}
+                  >
+                    {chats.find((c) => c.id === s.chatId)?.name || 'Chat'}
+                  </div>
+                  <div
+                    style={{
+                      fontSize: 13,
+                      lineHeight: 1.6,
+                      color: 'var(--text-primary)',
+                      userSelect: 'text',
+                    }}
+                  >
+                    {s.summary.length > 200 ? s.summary.slice(0, 200) + '...' : s.summary}
+                  </div>
+                  <div style={{ fontSize: 10, color: 'var(--text-secondary)', marginTop: 4 }}>
+                    {new Date(s.createdAt * 1000).toLocaleTimeString()}
+                    {' \u00b7 '}{s.messageCount} msgs \u00b7 {s.provider}/{s.model}
+                  </div>
+                </div>
+              ))}
             </div>
           ) : (
             <div style={{ color: 'var(--text-secondary)', fontSize: 13 }}>
-              No summaries yet. Select a chat and generate your first summary.
+              No summaries in the last 2 hours. Summarize a chat to see highlights here.
             </div>
           )}
         </div>
@@ -238,9 +266,9 @@ export function Dashboard({ chats, connectionState, onNavigateToChat }: Props) {
             <h3 style={{ fontSize: 15, fontWeight: 600 }}>Action Items</h3>
           </div>
 
-          {latestSummary && latestSummary.actionItems.length > 0 ? (
+          {allActionItems.length > 0 ? (
             <div>
-              {latestSummary.actionItems.slice(0, 5).map((item, i) => (
+              {allActionItems.slice(0, 6).map((item, i) => (
                 <div
                   key={i}
                   style={{
@@ -280,7 +308,7 @@ export function Dashboard({ chats, connectionState, onNavigateToChat }: Props) {
             </div>
           ) : (
             <div style={{ color: 'var(--text-secondary)', fontSize: 13 }}>
-              No action items found. Generate a summary to extract tasks.
+              No action items in the last 2 hours. Summarize a chat to extract tasks.
             </div>
           )}
         </div>

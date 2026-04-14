@@ -139,14 +139,16 @@ export class BaileysClient extends EventEmitter<BaileysClientEvents> {
       // Emit chat metadata with actual names
       for (const chat of event.chats) {
         if (chat.id) {
-          // For groups: use chat.name. For 1:1: look up contact name.
           const isGroup = chat.id.endsWith('@g.us');
-          let name = chat.name;
+          // Try multiple name fields — Baileys stores group names inconsistently
+          let name = chat.name
+            || (chat as any).subject
+            || (chat as any).pushName
+            || (chat as any).formattedTitle;
           if (!name && !isGroup) {
             name = this.contactNames.get(chat.id);
           }
           if (!name) {
-            // Last resort: format the phone number or show "Group"
             name = isGroup ? 'Group' : chat.id.split('@')[0].replace(/^(\d{1,3})(\d+)/, '+$1 $2');
           }
 
@@ -161,6 +163,43 @@ export class BaileysClient extends EventEmitter<BaileysClientEvents> {
                 ? chat.conversationTimestamp
                 : Number(chat.conversationTimestamp)
               : Math.floor(Date.now() / 1000),
+            fromMe: false,
+          }]);
+        }
+      }
+    });
+
+    // ── Chat updates (group names often arrive here after initial sync) ──
+    socket.ev.on('chats.update' as any, (updates: any[]) => {
+      for (const update of updates) {
+        if (update.id) {
+          const name = update.name || update.subject || update.pushName || update.formattedTitle;
+          if (name) {
+            this.emit('messages', [{
+              id: `chat-update-${update.id}-${Date.now()}`,
+              chatId: update.id,
+              senderJid: 'chat-meta',
+              senderName: name,
+              body: '',
+              timestamp: Math.floor(Date.now() / 1000),
+              fromMe: false,
+            }]);
+          }
+        }
+      }
+    });
+
+    // ── Group metadata updates ──
+    socket.ev.on('groups.update' as any, (updates: any[]) => {
+      for (const update of updates) {
+        if (update.id && update.subject) {
+          this.emit('messages', [{
+            id: `group-update-${update.id}-${Date.now()}`,
+            chatId: update.id,
+            senderJid: 'chat-meta',
+            senderName: update.subject,
+            body: '',
+            timestamp: Math.floor(Date.now() / 1000),
             fromMe: false,
           }]);
         }
