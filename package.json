@@ -2,7 +2,7 @@
   "name": "whatsapp-summarizer",
   "version": "0.1.0",
   "description": "Local-first WhatsApp chat summarizer with pluggable AI providers",
-  "main": ".vite/build/main.js",
+  "main": ".vite/build/index.js",
   "private": true,
   "scripts": {
     "dev": "electron-forge start",
@@ -19,7 +19,6 @@
   "dependencies": {
     "@whiskeysockets/baileys": "^6.7.16",
     "better-sqlite3": "^11.7.0",
-    "electron-store": "^10.0.0",
     "qrcode": "^1.5.4",
     "zod": "^3.24.2"
   },
