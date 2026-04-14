@@ -367,8 +367,14 @@ export function Dashboard({ chats, connectionState, onNavigateToChat }: Props) {
         </h3>
 
         {chats.length === 0 ? (
-          <div style={{ color: 'var(--text-secondary)', fontSize: 13 }}>
-            Connect to WhatsApp and sync some chats first.
+          <div style={{ color: 'var(--text-secondary)', fontSize: 13, textAlign: 'center', padding: 20 }}>
+            <div style={{
+              width: 24, height: 24, border: '2px solid var(--border)',
+              borderTopColor: 'var(--accent)', borderRadius: '50%',
+              margin: '0 auto 12px', animation: 'spin 1s linear infinite',
+            }} />
+            <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>
+            Syncing chats from WhatsApp...
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
