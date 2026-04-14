@@ -1,10 +1,11 @@
 import * as baileys from '@whiskeysockets/baileys';
 import type { WASocket, BaileysEventMap, WAMessage } from '@whiskeysockets/baileys';
 
-// Baileys is externalized — handle both ESM default and CJS module.exports
-const makeWASocket = (baileys as any).default ?? baileys.makeWASocket;
-const useMultiFileAuthState = baileys.useMultiFileAuthState;
-const DisconnectReason = baileys.DisconnectReason;
+// Baileys is externalized — Vite's namespace interop puts the CJS module
+// object at .default (not a function). Named exports like .makeWASocket
+// are the actual functions.
+const makeWASocket = baileys.makeWASocket;
+const { useMultiFileAuthState, DisconnectReason } = baileys;
 
 // @hapi/boom is externalized too
 const Boom = (require('@hapi/boom') as any).Boom ?? require('@hapi/boom');
