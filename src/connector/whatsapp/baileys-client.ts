@@ -52,8 +52,7 @@ export class BaileysClient extends EventEmitter<BaileysClientEvents> {
 
     const socket = makeWASocket({
       auth: state,
-      printQRInTerminal: true,
-      browser: baileys.Browsers?.ubuntu('Desktop') ?? ['WhatsApp Summarizer', 'Desktop', '2.0.0'],
+      browser: baileys.Browsers?.ubuntu('Desktop') ?? ['Ubuntu', 'Desktop', '22.04.4'],
       syncFullHistory: false,
     });
 
