@@ -4,7 +4,7 @@ export interface SummaryResult {
   id: number;
   /** Which chat was summarized */
   chatId: string;
-  /** Human-readable summary paragraphs */
+  /** Human-readable summary paragraphs (legacy, still populated for backwards compat) */
   summary: string;
   /** Extracted action items */
   actionItems: ActionItem[];
@@ -20,6 +20,22 @@ export interface SummaryResult {
   timeRange: [number, number];
   /** When this summary was created (unix epoch seconds) */
   createdAt: number;
+
+  // ── New structured fields ───────────────────────────────────
+  /** TL;DR - 2-3 line max overview */
+  tldr: string;
+  /** Key topics discussed in the conversation */
+  keyTopics: string[];
+  /** Decisions that were made, with context */
+  decisionsMade: string[];
+  /** What is expected from the user (explicit + implicit expectations) */
+  expectedFromMe: string[];
+  /** Risks, blockers, confusion, delays */
+  risks: string[];
+  /** Useful context (only if needed) */
+  usefulContext: string[];
+  /** Overall tone / sentiment of the conversation */
+  tone: string;
 }
 
 export interface ActionItem {
@@ -29,7 +45,31 @@ export interface ActionItem {
   description: string;
   /** Optional deadline mentioned in conversation */
   deadline: string | null;
+  /** Priority level */
+  priority: 'high' | 'medium' | 'low' | null;
 }
+
+/** Extra structured data stored alongside a summary (persisted as JSON). */
+export interface SummaryExtraData {
+  tldr: string;
+  keyTopics: string[];
+  decisionsMade: string[];
+  expectedFromMe: string[];
+  risks: string[];
+  usefulContext: string[];
+  tone: string;
+}
+
+/** Default extra data for backwards compatibility with old summaries. */
+export const DEFAULT_EXTRA_DATA: SummaryExtraData = {
+  tldr: '',
+  keyTopics: [],
+  decisionsMade: [],
+  expectedFromMe: [],
+  risks: [],
+  usefulContext: [],
+  tone: '',
+};
 
 /** Request to create a new summary. Sent from renderer -> main via IPC. */
 export interface SummarizeRequest {

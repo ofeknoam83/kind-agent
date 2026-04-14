@@ -28,6 +28,13 @@ export interface SummarizeOutput {
   summary: string;
   actionItems: ActionItem[];
   unresolvedQuestions: string[];
+  tldr: string;
+  keyTopics: string[];
+  decisionsMade: string[];
+  expectedFromMe: string[];
+  risks: string[];
+  usefulContext: string[];
+  tone: string;
 }
 
 /**
@@ -35,30 +42,51 @@ export interface SummarizeOutput {
  * Providers send this as the system message and format the chat
  * transcript as the user message.
  */
-export const SYSTEM_PROMPT = `You are a WhatsApp chat summarizer. You will receive a transcript of a WhatsApp conversation.
+export const SYSTEM_PROMPT = `You are an expert WhatsApp chat summarizer. You will receive a transcript of a WhatsApp conversation.
 
 Produce a JSON response with exactly this structure:
+
 {
-  "summary": "A clear, concise summary of the conversation in 2-5 paragraphs. Focus on key decisions, topics discussed, and outcomes.",
+  "tldr": "2-3 line max high-level overview of what this conversation is about and what happened.",
+  "keyTopics": [
+    "Topic 1",
+    "Topic 2"
+  ],
+  "decisionsMade": [
+    "Decision X was made because of Y"
+  ],
+  "unresolvedQuestions": [
+    "Question raised by Person - why it matters"
+  ],
   "actionItems": [
     {
       "assignee": "Person name or null if unassigned",
       "description": "What needs to be done",
-      "deadline": "Mentioned deadline or null"
+      "deadline": "Mentioned deadline or null",
+      "priority": "high | medium | low or null if unclear"
     }
   ],
-  "unresolvedQuestions": [
-    "Questions that were raised but not answered in the conversation"
-  ]
+  "expectedFromMe": [
+    "Explicit or implicit expectation on the reader / user"
+  ],
+  "risks": [
+    "Blockers, confusion, delays, or issues raised"
+  ],
+  "usefulContext": [
+    "Background info, links, references only if needed"
+  ],
+  "tone": "Overall tone/sentiment of the conversation and any notable emotional signals"
 }
 
 Rules:
 - Output ONLY valid JSON. No markdown, no code fences, no explanation.
-- If there are no action items, return an empty array.
-- If there are no unresolved questions, return an empty array.
-- Preserve the original language of the conversation in the summary.
-- Attribute action items to specific people when possible.
-- Be concise but complete.`;
+- If any section has no items, return an empty array (or empty string for tone/tldr).
+- Preserve the original language of the conversation in all output.
+- For actionItems: attribute to specific people when possible. Set priority to "high", "medium", or "low" based on urgency/importance. Use null if unclear.
+- For expectedFromMe: think about what the reader of this summary would be expected to do, both explicitly stated and implicitly implied.
+- For risks: highlight any blockers, sources of confusion, potential delays, or misalignments.
+- For tone: describe the overall sentiment (e.g. "Collaborative and upbeat", "Tense, with frustration from X about Y").
+- Be concise but complete. Do not invent information not present in the conversation.`;
 
 /**
  * Format a message array into a transcript string for the LLM.
@@ -84,8 +112,26 @@ export function parseProviderResponse(raw: string): SummarizeOutput {
 
   const parsed = JSON.parse(cleaned);
 
+  const tldr = String(parsed.tldr ?? parsed.summary ?? '');
+
+  // Build a formatted summary string from the structured data for backwards compat
+  const summaryParts: string[] = [];
+  if (tldr) summaryParts.push(tldr);
+  if (Array.isArray(parsed.keyTopics) && parsed.keyTopics.length > 0) {
+    summaryParts.push('Key Topics: ' + parsed.keyTopics.join(', '));
+  }
+  if (Array.isArray(parsed.decisionsMade) && parsed.decisionsMade.length > 0) {
+    summaryParts.push('Decisions: ' + parsed.decisionsMade.join('; '));
+  }
+  const summary = summaryParts.length > 0 ? summaryParts.join('\n\n') : String(parsed.summary ?? '');
+
+  const validPriorities = new Set(['high', 'medium', 'low']);
+
   return {
-    summary: String(parsed.summary ?? ''),
+    summary,
+    tldr,
+    keyTopics: Array.isArray(parsed.keyTopics) ? parsed.keyTopics.map(String) : [],
+    decisionsMade: Array.isArray(parsed.decisionsMade) ? parsed.decisionsMade.map(String) : [],
     actionItems: Array.isArray(parsed.actionItems)
       ? parsed.actionItems.map((item: Record<string, unknown>) => ({
           assignee: item.assignee && item.assignee !== 'null' && item.assignee !== 'None'
@@ -93,10 +139,16 @@ export function parseProviderResponse(raw: string): SummarizeOutput {
           description: String(item.description ?? ''),
           deadline: item.deadline && item.deadline !== 'null' && item.deadline !== 'None'
             ? String(item.deadline) : null,
+          priority: typeof item.priority === 'string' && validPriorities.has(item.priority.toLowerCase())
+            ? item.priority.toLowerCase() as 'high' | 'medium' | 'low' : null,
         }))
       : [],
     unresolvedQuestions: Array.isArray(parsed.unresolvedQuestions)
       ? parsed.unresolvedQuestions.map(String)
       : [],
+    expectedFromMe: Array.isArray(parsed.expectedFromMe) ? parsed.expectedFromMe.map(String) : [],
+    risks: Array.isArray(parsed.risks) ? parsed.risks.map(String) : [],
+    usefulContext: Array.isArray(parsed.usefulContext) ? parsed.usefulContext.map(String) : [],
+    tone: String(parsed.tone ?? ''),
   };
 }

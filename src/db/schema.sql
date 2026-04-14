@@ -30,6 +30,7 @@ CREATE TABLE IF NOT EXISTS summaries (
   summary           TEXT NOT NULL,
   action_items      TEXT NOT NULL DEFAULT '[]',   -- JSON array of ActionItem
   unresolved_questions TEXT NOT NULL DEFAULT '[]', -- JSON array of strings
+  extra_data        TEXT NOT NULL DEFAULT '{}',   -- JSON: tldr, keyTopics, decisionsMade, expectedFromMe, risks, usefulContext, tone
   provider          TEXT NOT NULL,
   model             TEXT NOT NULL,
   message_count     INTEGER NOT NULL,
