@@ -1,6 +1,6 @@
 import { app, BrowserWindow, session } from 'electron';
 import path from 'node:path';
-import { registerIpcHandlers } from './ipc-handlers';
+import { registerIpcHandlers, closeDb } from './ipc-handlers';
 
 // Enforce single instance — WhatsApp only allows one connection per device.
 const gotLock = app.requestSingleInstanceLock();
@@ -87,9 +87,7 @@ function createWindow(): void {
 app.whenReady().then(createWindow);
 
 app.on('window-all-closed', () => {
-  try {
-    require('../db/connection').closeDb();
-  } catch { /* DB may not have been initialized */ }
+  try { closeDb(); } catch { /* DB may not have been initialized */ }
   app.quit();
 });
 
