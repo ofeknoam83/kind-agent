@@ -5,10 +5,11 @@ interface Props {
   state: ConnectionState;
   onConnect: () => void;
   onDisconnect: () => void;
+  onLogout: () => void;
   loading: boolean;
 }
 
-export function ConnectionPanel({ state, onConnect, onDisconnect, loading }: Props) {
+export function ConnectionPanel({ state, onConnect, onDisconnect, onLogout, loading }: Props) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
       <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
@@ -37,20 +38,36 @@ export function ConnectionPanel({ state, onConnect, onDisconnect, loading }: Pro
           {loading ? 'Connecting...' : 'Connect'}
         </button>
       ) : state.status === 'connected' ? (
-        <button
-          onClick={onDisconnect}
-          style={{
-            background: 'none',
-            color: 'var(--text-secondary)',
-            border: '1px solid var(--border)',
-            borderRadius: 6,
-            padding: '4px 10px',
-            fontSize: 11,
-            cursor: 'pointer',
-          }}
-        >
-          Disconnect
-        </button>
+        <div style={{ display: 'flex', gap: 6 }}>
+          <button
+            onClick={onDisconnect}
+            style={{
+              background: 'none',
+              color: 'var(--text-secondary)',
+              border: '1px solid var(--border)',
+              borderRadius: 6,
+              padding: '4px 10px',
+              fontSize: 11,
+              cursor: 'pointer',
+            }}
+          >
+            Disconnect
+          </button>
+          <button
+            onClick={onLogout}
+            style={{
+              background: 'none',
+              color: '#e74c3c',
+              border: '1px solid rgba(231, 76, 60, 0.3)',
+              borderRadius: 6,
+              padding: '4px 10px',
+              fontSize: 11,
+              cursor: 'pointer',
+            }}
+          >
+            Logout
+          </button>
+        </div>
       ) : null}
     </div>
   );

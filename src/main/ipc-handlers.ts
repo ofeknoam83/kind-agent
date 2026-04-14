@@ -117,6 +117,15 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     }
   });
 
+  ipcMain.handle(IpcChannels.WHATSAPP_LOGOUT, async () => {
+    try {
+      await ensureBaileys(mainWindow).logout();
+      return { success: true };
+    } catch (err) {
+      return { error: String(err) };
+    }
+  });
+
   ipcMain.handle(IpcChannels.WHATSAPP_GET_STATE, () => {
     try {
       return ensureBaileys(mainWindow).getState();

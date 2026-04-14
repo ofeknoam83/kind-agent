@@ -36,5 +36,9 @@ export function useConnection() {
     await api.whatsapp.disconnect();
   }, [api]);
 
-  return { state, connect, disconnect, loading };
+  const logout = useCallback(async () => {
+    await api.whatsapp.logout();
+  }, [api]);
+
+  return { state, connect, disconnect, logout, loading };
 }
