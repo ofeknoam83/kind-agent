@@ -1,14 +1,208 @@
-import React from 'react';
-import type { ChatMessage } from '../../shared/types';
+import React, { useState, useRef, useEffect } from 'react';
+import type { Chat, ChatMessage, ChatCategory } from '../../shared/types';
+import { CHAT_CATEGORIES } from '../../shared/types';
 import { SummaryPanel } from './SummaryPanel';
+import { useApi } from '../hooks/use-api';
 
 interface Props {
   chatId: string | null;
   messages: ChatMessage[];
   loading: boolean;
+  chats: Chat[];
+  onCategoryChanged?: () => void;
 }
 
-export function ChatView({ chatId, messages, loading }: Props) {
+const CATEGORY_COLORS: Record<ChatCategory, string> = {
+  School: '#3498db',
+  Kindergarten: '#e91e63',
+  Work: '#25d366',
+  Family: '#9b59b6',
+  Friends: '#f39c12',
+  Other: '#666',
+};
+
+function CategoryPicker({
+  chatId,
+  currentCategory,
+  onCategoryChanged,
+}: {
+  chatId: string;
+  currentCategory: ChatCategory | null;
+  onCategoryChanged?: () => void;
+}) {
+  const api = useApi();
+  const [open, setOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    if (open) {
+      document.addEventListener('mousedown', handler);
+    }
+    return () => document.removeEventListener('mousedown', handler);
+  }, [open]);
+
+  const setCategory = async (cat: ChatCategory | null) => {
+    setSaving(true);
+    setOpen(false);
+    try {
+      await api.chats.setCategory(chatId, cat);
+      onCategoryChanged?.();
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const badgeColor = currentCategory ? CATEGORY_COLORS[currentCategory] : '#555';
+
+  return (
+    <div ref={dropdownRef} style={{ position: 'relative', display: 'inline-block' }}>
+      {/* Badge / trigger button */}
+      <button
+        onClick={() => setOpen(!open)}
+        disabled={saving}
+        style={{
+          background: currentCategory ? `${badgeColor}22` : 'rgba(255,255,255,0.06)',
+          color: currentCategory ? badgeColor : 'var(--text-secondary)',
+          border: `1px solid ${currentCategory ? `${badgeColor}44` : 'var(--border)'}`,
+          borderRadius: 12,
+          padding: '3px 10px',
+          fontSize: 11,
+          fontWeight: 600,
+          cursor: saving ? 'not-allowed' : 'pointer',
+          transition: 'all 0.15s ease',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 4,
+        }}
+      >
+        {currentCategory && (
+          <span
+            style={{
+              width: 6,
+              height: 6,
+              borderRadius: '50%',
+              background: badgeColor,
+              flexShrink: 0,
+            }}
+          />
+        )}
+        {saving ? 'Saving...' : currentCategory || 'Set category'}
+        <span style={{ fontSize: 8, marginLeft: 2 }}>{open ? '\u25B2' : '\u25BC'}</span>
+      </button>
+
+      {/* Dropdown */}
+      {open && (
+        <div
+          style={{
+            position: 'absolute',
+            top: '100%',
+            left: 0,
+            marginTop: 4,
+            background: '#1a1a1a',
+            border: '1px solid var(--border)',
+            borderRadius: 10,
+            padding: 4,
+            zIndex: 100,
+            minWidth: 140,
+            boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
+          }}
+        >
+          {CHAT_CATEGORIES.map((cat) => {
+            const color = CATEGORY_COLORS[cat];
+            const isSelected = cat === currentCategory;
+            return (
+              <button
+                key={cat}
+                onClick={() => setCategory(cat)}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  width: '100%',
+                  padding: '6px 10px',
+                  border: 'none',
+                  borderRadius: 6,
+                  background: isSelected ? `${color}22` : 'transparent',
+                  color: isSelected ? color : 'var(--text-primary)',
+                  cursor: 'pointer',
+                  fontSize: 12,
+                  fontWeight: isSelected ? 600 : 400,
+                  textAlign: 'left',
+                  transition: 'background 0.1s',
+                }}
+                onMouseEnter={(e) => {
+                  (e.target as HTMLElement).style.background = `${color}15`;
+                }}
+                onMouseLeave={(e) => {
+                  (e.target as HTMLElement).style.background = isSelected
+                    ? `${color}22`
+                    : 'transparent';
+                }}
+              >
+                <span
+                  style={{
+                    width: 8,
+                    height: 8,
+                    borderRadius: '50%',
+                    background: color,
+                    flexShrink: 0,
+                  }}
+                />
+                {cat}
+              </button>
+            );
+          })}
+          {/* Clear option */}
+          {currentCategory && (
+            <>
+              <div
+                style={{
+                  height: 1,
+                  background: 'var(--border)',
+                  margin: '4px 0',
+                }}
+              />
+              <button
+                onClick={() => setCategory(null)}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  width: '100%',
+                  padding: '6px 10px',
+                  border: 'none',
+                  borderRadius: 6,
+                  background: 'transparent',
+                  color: 'var(--text-secondary)',
+                  cursor: 'pointer',
+                  fontSize: 12,
+                  textAlign: 'left',
+                }}
+                onMouseEnter={(e) => {
+                  (e.target as HTMLElement).style.background = 'rgba(255,255,255,0.05)';
+                }}
+                onMouseLeave={(e) => {
+                  (e.target as HTMLElement).style.background = 'transparent';
+                }}
+              >
+                Clear category
+              </button>
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+export function ChatView({ chatId, messages, loading, chats, onCategoryChanged }: Props) {
   if (!chatId) {
     return (
       <div
@@ -25,9 +219,48 @@ export function ChatView({ chatId, messages, loading }: Props) {
     );
   }
 
+  const currentChat = chats.find((c) => c.id === chatId);
+
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-      {/* Summary panel at the top */}
+      {/* Chat header with category picker */}
+      <div
+        style={{
+          padding: '10px 16px',
+          borderBottom: '1px solid var(--border)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          background: 'var(--bg-secondary)',
+          flexShrink: 0,
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>
+            {currentChat?.name || 'Chat'}
+          </span>
+          {currentChat?.isGroup && (
+            <span
+              style={{
+                fontSize: 10,
+                color: 'var(--text-secondary)',
+                background: 'rgba(255,255,255,0.06)',
+                padding: '1px 6px',
+                borderRadius: 4,
+              }}
+            >
+              Group
+            </span>
+          )}
+        </div>
+        <CategoryPicker
+          chatId={chatId}
+          currentCategory={currentChat?.category || null}
+          onCategoryChanged={onCategoryChanged}
+        />
+      </div>
+
+      {/* Summary panel */}
       <SummaryPanel chatId={chatId} />
 
       {/* Messages */}

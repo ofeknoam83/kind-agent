@@ -171,6 +171,8 @@ export function App() {
                   chatId={chatState.selectedChatId}
                   messages={chatState.messages}
                   loading={chatState.loadingMessages}
+                  chats={chatState.chats}
+                  onCategoryChanged={chatState.refreshChats}
                 />
               </>
             )}
