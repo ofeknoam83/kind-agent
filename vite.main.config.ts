@@ -6,7 +6,13 @@ export default defineConfig({
   },
   build: {
     rollupOptions: {
-      external: ['better-sqlite3', 'electron-store'],
+      external: [
+        'better-sqlite3',
+        'electron-store',
+        'sharp',
+        'link-preview-js',
+        '@hapi/boom',
+      ],
     },
   },
 });
