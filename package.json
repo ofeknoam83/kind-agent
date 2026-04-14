@@ -2,7 +2,7 @@
   "name": "whatsapp-summarizer",
   "version": "0.1.0",
   "description": "Local-first WhatsApp chat summarizer with pluggable AI providers",
-  "main": "dist/main/index.js",
+  "main": ".vite/build/main.js",
   "private": true,
   "scripts": {
     "dev": "electron-forge start",
@@ -37,6 +37,7 @@
     "@types/react-dom": "^19.0.3",
     "@typescript-eslint/eslint-plugin": "^8.19.1",
     "@typescript-eslint/parser": "^8.19.1",
+    "@vitejs/plugin-react": "^4.7.0",
     "electron": "^34.0.0",
     "eslint": "^9.18.0",
     "react": "^19.0.0",
