@@ -30,6 +30,9 @@ const api = {
     disconnect: (): Promise<{ success: boolean }> =>
       ipcRenderer.invoke(IpcChannels.WHATSAPP_DISCONNECT),
 
+    logout: (): Promise<{ success?: boolean; error?: string }> =>
+      ipcRenderer.invoke(IpcChannels.WHATSAPP_LOGOUT),
+
     getState: (): Promise<ConnectionState> =>
       ipcRenderer.invoke(IpcChannels.WHATSAPP_GET_STATE),
 

@@ -7,6 +7,7 @@ const { useMultiFileAuthState, DisconnectReason } = baileys;
 const Boom = (require('@hapi/boom') as any).Boom ?? require('@hapi/boom');
 import QRCode from 'qrcode';
 import path from 'node:path';
+import fs from 'node:fs';
 import { app } from 'electron';
 import { EventEmitter } from 'node:events';
 import type { ChatMessage, ConnectionState } from '../../shared/types';
@@ -286,6 +287,32 @@ export class BaileysClient extends EventEmitter<BaileysClientEvents> {
     }
     this.phoneNumber = null;
     this.pairingCodeRequested = false;
+    this.setState({ status: 'disconnected' });
+  }
+
+  /** Logout: revoke WhatsApp session and clear saved credentials. */
+  async logout(): Promise<void> {
+    if (this.socket) {
+      try {
+        await this.socket.logout();
+      } catch (err) {
+        console.error('[BAILEYS] Logout error:', err);
+      }
+      this.socket = null;
+    }
+
+    // Delete auth directory to force fresh QR on next connect
+    const authDir = path.join(app.getPath('userData'), AUTH_DIR);
+    try {
+      fs.rmSync(authDir, { recursive: true, force: true });
+      console.log('[BAILEYS] Auth state cleared');
+    } catch (err) {
+      console.error('[BAILEYS] Failed to clear auth:', err);
+    }
+
+    this.phoneNumber = null;
+    this.pairingCodeRequested = false;
+    this.contactNames.clear();
     this.setState({ status: 'disconnected' });
   }
 

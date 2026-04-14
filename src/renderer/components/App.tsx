@@ -146,6 +146,7 @@ export function App() {
               state={connection.state}
               onConnect={connection.connect}
               onDisconnect={connection.disconnect}
+              onLogout={connection.logout}
               loading={connection.loading}
             />
           </header>

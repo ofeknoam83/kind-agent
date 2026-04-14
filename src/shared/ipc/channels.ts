@@ -10,6 +10,7 @@ export const IpcChannels = {
   // ── WhatsApp connection ──────────────────────────────────
   WHATSAPP_CONNECT: 'whatsapp:connect',
   WHATSAPP_DISCONNECT: 'whatsapp:disconnect',
+  WHATSAPP_LOGOUT: 'whatsapp:logout',
   WHATSAPP_GET_STATE: 'whatsapp:get-state',
 
   // ── Chats ────────────────────────────────────────────────
