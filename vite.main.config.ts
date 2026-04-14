@@ -16,7 +16,6 @@ export default defineConfig({
         ...builtinModules.map((m) => `node:${m}`),
         'electron',
         'better-sqlite3',
-        'electron-store',
         '@whiskeysockets/baileys',
         '@hapi/boom',
         '@cacheable/node-cache',
