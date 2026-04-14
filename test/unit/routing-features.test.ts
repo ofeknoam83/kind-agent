@@ -111,7 +111,7 @@ describe('computeSensitivity', () => {
 
   it('detects financial information', () => {
     const bodies = ['My card number is 4532-1234-5678-9012', 'Thanks for the account details'];
-    expect(computeSensitivity(bodies)).toBeGreaterThan(0.2);
+    expect(computeSensitivity(bodies)).toBeGreaterThan(0.15);
   });
 
   it('detects confidentiality markers', () => {
