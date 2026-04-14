@@ -101,6 +101,14 @@ function runMigrations(database: Database.Database): void {
     database.exec(`ALTER TABLE chats ADD COLUMN category TEXT DEFAULT NULL`);
   }
 
+  // Ensure Ollama is the default active provider for existing databases
+  const activeCount = (database.prepare(
+    `SELECT COUNT(*) as cnt FROM provider_configs WHERE active = 1`
+  ).get() as { cnt: number }).cnt;
+  if (activeCount === 0) {
+    database.exec(`UPDATE provider_configs SET active = 1 WHERE type = 'ollama'`);
+  }
+
   // Fix: recalculate last_msg_ts from actual message timestamps.
   // Previous versions used Date.now() for metadata messages, which corrupted sort order.
   database.exec(`
