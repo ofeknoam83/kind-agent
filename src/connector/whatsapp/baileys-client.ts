@@ -137,6 +137,11 @@ export class BaileysClient extends EventEmitter<BaileysClientEvents> {
       }
 
       // Emit chat metadata with actual names
+      // Log first few chats to debug name resolution
+      for (const chat of event.chats.slice(0, 5)) {
+        console.log(`[BAILEYS] Chat debug: id=${chat.id}, name=${chat.name}, subject=${(chat as any).subject}, convTs=${chat.conversationTimestamp}`);
+      }
+
       for (const chat of event.chats) {
         if (chat.id) {
           const isGroup = chat.id.endsWith('@g.us');
@@ -152,17 +157,21 @@ export class BaileysClient extends EventEmitter<BaileysClientEvents> {
             name = isGroup ? 'Group' : chat.id.split('@')[0].replace(/^(\d{1,3})(\d+)/, '+$1 $2');
           }
 
+          // Use conversationTimestamp — this reflects ACTUAL last activity
+          // even for chats where we can't extract text messages
+          const convTs = chat.conversationTimestamp
+            ? typeof chat.conversationTimestamp === 'number'
+              ? chat.conversationTimestamp
+              : Number(chat.conversationTimestamp)
+            : 0;
+
           this.emit('messages', [{
             id: `chat-meta-${chat.id}`,
             chatId: chat.id,
             senderJid: 'chat-meta',
             senderName: name,
             body: '',
-            timestamp: chat.conversationTimestamp
-              ? typeof chat.conversationTimestamp === 'number'
-                ? chat.conversationTimestamp
-                : Number(chat.conversationTimestamp)
-              : Math.floor(Date.now() / 1000),
+            timestamp: convTs || Math.floor(Date.now() / 1000),
             fromMe: false,
           }]);
         }
@@ -234,9 +243,16 @@ export class BaileysClient extends EventEmitter<BaileysClientEvents> {
   }
 
   private normalizeMessage(msg: WAMessage): ChatMessage | null {
+    const m = msg.message;
     const body =
-      msg.message?.conversation ||
-      msg.message?.extendedTextMessage?.text ||
+      m?.conversation ||
+      m?.extendedTextMessage?.text ||
+      m?.imageMessage?.caption ||
+      m?.videoMessage?.caption ||
+      m?.documentMessage?.caption ||
+      m?.documentMessage?.fileName ||
+      m?.listResponseMessage?.title ||
+      m?.buttonsResponseMessage?.selectedDisplayText ||
       null;
 
     if (!body) return null;
