@@ -82,11 +82,25 @@ Rules:
 - Output ONLY valid JSON. No markdown, no code fences, no explanation.
 - If any section has no items, return an empty array (or empty string for tone/tldr).
 - Preserve the original language of the conversation in all output.
-- For actionItems: attribute to specific people when possible. Set priority to "high", "medium", or "low" based on urgency/importance. Use null if unclear.
-- For expectedFromMe: think about what the reader of this summary would be expected to do, both explicitly stated and implicitly implied.
-- For risks: highlight any blockers, sources of confusion, potential delays, or misalignments.
-- For tone: describe the overall sentiment (e.g. "Collaborative and upbeat", "Tense, with frustration from X about Y").
-- Be concise but complete. Do not invent information not present in the conversation.`;
+- Be concise but complete. Do not invent information not present in the conversation.
+
+Action items — STRICT rules:
+- ONLY extract action items that someone in the conversation EXPLICITLY committed to, was asked to do, or was assigned.
+- A real action item sounds like: "I'll do X", "Can you handle Y?", "Let's schedule Z", "Please send the report by Friday".
+- Do NOT extract action items from quoted, forwarded, or draft messages that someone shared for review or approval. If someone says "here's what I plan to send" or shares a screenshot/draft, the CONTENT of that draft is NOT an action item — the action is "review/approve the draft" at most.
+- Do NOT infer tasks that were never discussed. If no one asked for it, it's not an action item.
+- When in doubt, leave it out. Fewer accurate items are better than many hallucinated ones.
+- Attribute to specific people when possible. Set priority based on urgency/importance. Use null if unclear.
+
+Expected from me:
+- Only include expectations that were DIRECTLY stated or clearly implied toward the reader.
+- Do not fabricate expectations from tangential context or from content inside shared/forwarded/quoted messages.
+
+Risks:
+- Highlight any blockers, sources of confusion, potential delays, or misalignments.
+
+Tone:
+- Describe the overall sentiment (e.g. "Collaborative and upbeat", "Tense, with frustration from X about Y").`;
 
 /**
  * Format a message array into a transcript string for the LLM.
