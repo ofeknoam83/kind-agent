@@ -49,10 +49,25 @@ function ensureBaileys(mainWindow: BrowserWindow) {
 
       for (const [chatId, msgs] of byChatId) {
         const maxTs = Math.max(...msgs.map((m) => m.timestamp));
-        // Priority: chat-meta name > non-Unknown sender > fallback to JID
+        const isGroup = chatId.endsWith('@g.us');
+
+        // Only use authoritative name sources to avoid overwriting
+        // group names with individual sender names
         const metaMsg = msgs.find((m) => m.senderJid === 'chat-meta');
-        const namedMsg = msgs.find((m) => m.senderName && m.senderName !== 'Unknown' && m.senderJid !== 'chat-meta');
-        const chatName = metaMsg?.senderName ?? namedMsg?.senderName ?? chatId.split('@')[0];
+        let chatName: string;
+        if (metaMsg) {
+          // Authoritative: from chat metadata / group update
+          chatName = metaMsg.senderName;
+        } else if (isGroup) {
+          // For groups without metadata in this batch, use a placeholder
+          // that the DB upsert will NOT overwrite an existing good name
+          chatName = 'Group';
+        } else {
+          // For 1:1 chats, sender name is the contact name
+          const namedMsg = msgs.find((m) => m.senderName && m.senderName !== 'Unknown');
+          chatName = namedMsg?.senderName ?? chatId.split('@')[0];
+        }
+
         // Filter out empty-body metadata messages before storing
         const realMessages = msgs.filter((m) => m.body.length > 0);
         chatRepo.upsertChatWithMessages(
