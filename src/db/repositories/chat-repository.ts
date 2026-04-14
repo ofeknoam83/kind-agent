@@ -33,11 +33,16 @@ export class ChatRepository {
           c.name,
           c.is_group as isGroup,
           c.last_msg_ts as lastMessageTimestamp,
+          c.category,
           COUNT(m.id) as messageCount
         FROM chats c
         LEFT JOIN messages m ON m.chat_id = c.id
         GROUP BY c.id
         ORDER BY c.last_msg_ts DESC
+      `),
+
+      setCategory: this.db.prepare(`
+        UPDATE chats SET category = @category WHERE id = @id
       `),
 
       getMessages: this.db.prepare(`
@@ -106,5 +111,22 @@ export class ChatRepository {
       chatId,
       afterTs: afterTimestamp,
     }) as ChatMessage[];
+  }
+
+  /** Set the category for a chat. */
+  setCategory(chatId: string, category: string | null): void {
+    this.stmts.setCategory.run({ id: chatId, category });
+  }
+
+  /** Get chats with new message counts since a given timestamp, sorted by count desc. */
+  getChatsWithNewMessagesSince(sinceTimestamp: number): Array<{ chatId: string; newMessageCount: number }> {
+    const stmt = this.db.prepare(`
+      SELECT chat_id as chatId, COUNT(*) as newMessageCount
+      FROM messages
+      WHERE timestamp > @sinceTs
+      GROUP BY chat_id
+      ORDER BY newMessageCount DESC
+    `);
+    return stmt.all({ sinceTs: sinceTimestamp }) as Array<{ chatId: string; newMessageCount: number }>;
   }
 }

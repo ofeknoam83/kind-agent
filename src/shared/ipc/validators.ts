@@ -40,14 +40,26 @@ export const SummaryGetRequest = z.object({
   id: z.number().int().positive(),
 });
 
+export const SetCategoryRequest = z.object({
+  chatId: z.string().min(1),
+  category: z.enum(['School', 'Kindergarten', 'Work', 'Family', 'Friends', 'Other']).nullable(),
+});
+
+export const SummaryRecentRequest = z.object({
+  sinceTimestamp: z.number().int(),
+  limit: z.number().int().min(1).max(200).default(50),
+});
+
 // ── Validator map keyed by channel ────────────────────────────────────
 // Used in main process to validate incoming IPC payloads.
 
 export const channelValidators = {
   'chats:get-messages': GetMessagesRequest,
+  'chats:set-category': SetCategoryRequest,
   'summarize:run': SummarizeRunRequest,
   'summarize:list': SummaryListRequest,
   'summarize:get': SummaryGetRequest,
+  'summarize:recent': SummaryRecentRequest,
   'providers:update': ProviderUpdateRequest,
   'providers:set-api-key': SetApiKeyRequest,
   'settings:set': SettingsSetRequest,

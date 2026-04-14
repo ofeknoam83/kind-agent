@@ -1,7 +1,8 @@
 import { app, BrowserWindow, session } from 'electron';
 import path from 'node:path';
-import { registerIpcHandlers, closeDb } from './ipc-handlers';
+import { registerIpcHandlers, closeDb, ensureRepos } from './ipc-handlers';
 import { startOllama, stopOllama } from './ollama-manager';
+import { startAutoSummarize, stopAutoSummarize } from './auto-summarize';
 
 // Enforce single instance — WhatsApp only allows one connection per device.
 const gotLock = app.requestSingleInstanceLock();
@@ -75,6 +76,29 @@ function createWindow(): void {
     console.error('Failed to register IPC handlers:', err);
   }
 
+  // Start/stop auto-summarize daemon based on WhatsApp connection state
+  const { ipcMain: ipcMainModule } = require('electron');
+  // Listen for connection state changes to auto-start/stop daemon
+  mainWindow.webContents.on('ipc-message', (_event: unknown, channel: string) => {
+    // We piggy-back on the state-changed event that the IPC handler already sends
+  });
+
+  // We listen to the push event from the IPC handler side.
+  // The BaileysClient emits 'connection-state' which triggers webContents.send.
+  // We intercept by patching webContents.send to detect connected/disconnected.
+  const origSend = mainWindow.webContents.send.bind(mainWindow.webContents);
+  mainWindow.webContents.send = (channel: string, ...args: unknown[]) => {
+    origSend(channel, ...args);
+    if (channel === 'event:whatsapp-state-changed') {
+      const state = args[0] as { status: string };
+      if (state?.status === 'connected') {
+        startAutoSummarize(mainWindow!, ensureRepos);
+      } else if (state?.status === 'disconnected') {
+        stopAutoSummarize();
+      }
+    }
+  };
+
   // Open DevTools in development
   if (MAIN_WINDOW_VITE_DEV_SERVER_URL) {
     mainWindow.webContents.openDevTools({ mode: 'detach' });
@@ -91,6 +115,7 @@ function createWindow(): void {
 app.whenReady().then(createWindow);
 
 app.on('window-all-closed', () => {
+  stopAutoSummarize();
   stopOllama();
   try { closeDb(); } catch { /* DB may not have been initialized */ }
   app.quit();
