@@ -1,13 +1,9 @@
 import * as baileys from '@whiskeysockets/baileys';
 import type { WASocket, BaileysEventMap, WAMessage } from '@whiskeysockets/baileys';
 
-// Baileys is externalized — Vite's namespace interop puts the CJS module
-// object at .default (not a function). Named exports like .makeWASocket
-// are the actual functions.
 const makeWASocket = baileys.makeWASocket;
 const { useMultiFileAuthState, DisconnectReason } = baileys;
 
-// @hapi/boom is externalized too
 const Boom = (require('@hapi/boom') as any).Boom ?? require('@hapi/boom');
 import QRCode from 'qrcode';
 import path from 'node:path';
@@ -21,29 +17,29 @@ type BaileysClientEvents = {
   messages: [ChatMessage[]];
 };
 
-/**
- * Wraps Baileys into a clean, Electron-friendly interface.
- *
- * Responsibilities:
- * - Manages socket lifecycle (connect, disconnect, reconnect)
- * - Emits normalized events (connection state, new messages)
- * - Converts Baileys message format -> our ChatMessage type
- * - Handles QR code generation for pairing
- *
- * Does NOT touch the database — that's the caller's job.
- */
 export class BaileysClient extends EventEmitter<BaileysClientEvents> {
   private socket: WASocket | null = null;
   private state: ConnectionState = { status: 'disconnected' };
+  private phoneNumber: string | null = null;
+  private pairingCodeRequested = false;
 
   getState(): ConnectionState {
     return this.state;
   }
 
-  async connect(): Promise<void> {
+  /**
+   * Connect to WhatsApp.
+   * @param phoneNumber — If provided, uses pairing code auth (enter code in WhatsApp).
+   *                       Format: country code + number, no + prefix. E.g. "14155551234"
+   *                       If omitted, falls back to QR code auth.
+   */
+  async connect(phoneNumber?: string): Promise<void> {
     if (this.socket) {
-      return; // Already connected or connecting
+      return;
     }
+
+    this.phoneNumber = phoneNumber ?? null;
+    this.pairingCodeRequested = false;
 
     const authDir = path.join(app.getPath('userData'), AUTH_DIR);
     const { state, saveCreds } = await useMultiFileAuthState(authDir);
@@ -53,6 +49,10 @@ export class BaileysClient extends EventEmitter<BaileysClientEvents> {
     const socket = makeWASocket({
       auth: state,
       browser: baileys.Browsers?.ubuntu('Desktop') ?? ['Ubuntu', 'Desktop', '22.04.4'],
+      // Override hardcoded protocol version — Baileys ships with an outdated
+      // version (1027934701) that WhatsApp rejects with 405. See:
+      // https://github.com/WhiskeySockets/Baileys/issues/2376
+      version: [2, 3000, 1034074495],
       syncFullHistory: false,
     });
 
@@ -63,12 +63,24 @@ export class BaileysClient extends EventEmitter<BaileysClientEvents> {
       console.log('[BAILEYS] connection.update:', JSON.stringify(update));
       const { connection, lastDisconnect, qr } = update;
 
-      if (qr) {
+      // If we have a phone number and registration is needed, request pairing code
+      if (qr && this.phoneNumber && !this.pairingCodeRequested) {
+        this.pairingCodeRequested = true;
+        console.log('[BAILEYS] Requesting pairing code for:', this.phoneNumber);
+        socket.requestPairingCode(this.phoneNumber)
+          .then((code: string) => {
+            console.log('[BAILEYS] Pairing code received:', code);
+            this.setState({ status: 'pairing-code', code });
+          })
+          .catch((err: unknown) => {
+            console.error('[BAILEYS] Pairing code request failed:', err);
+            this.setState({ status: 'error', message: `Pairing code failed: ${err}` });
+          });
+      } else if (qr && !this.phoneNumber) {
+        // QR code fallback
         console.log('[BAILEYS] QR received, length:', qr.length);
-        // Generate QR as SVG string (no canvas/native deps needed)
         QRCode.toString(qr, { type: 'svg', margin: 2 })
           .then((svg: string) => {
-            // Convert SVG to a data URI the renderer can display in an <img>
             const dataUrl = `data:image/svg+xml;base64,${Buffer.from(svg).toString('base64')}`;
             this.setState({ status: 'qr', qrData: dataUrl });
           })
@@ -83,19 +95,19 @@ export class BaileysClient extends EventEmitter<BaileysClientEvents> {
         const loggedOut = reason === DisconnectReason.loggedOut;
 
         this.socket = null;
+        this.pairingCodeRequested = false;
 
         if (loggedOut) {
           this.setState({ status: 'disconnected' });
         } else {
-          // Auto-reconnect on transient failures
           this.setState({ status: 'connecting' });
-          setTimeout(() => this.connect(), 3000);
+          setTimeout(() => this.connect(this.phoneNumber ?? undefined), 3000);
         }
       }
 
       if (connection === 'open') {
-        const phoneNumber = socket.user?.id?.split(':')[0] ?? 'unknown';
-        this.setState({ status: 'connected', phoneNumber });
+        const phone = socket.user?.id?.split(':')[0] ?? 'unknown';
+        this.setState({ status: 'connected', phoneNumber: phone });
       }
     });
 
@@ -104,7 +116,7 @@ export class BaileysClient extends EventEmitter<BaileysClientEvents> {
 
     // ── Incoming messages ──────────────────────────────────
     socket.ev.on('messages.upsert', (event: BaileysEventMap['messages.upsert']) => {
-      if (event.type !== 'notify') return; // Ignore history sync noise
+      if (event.type !== 'notify') return;
 
       const normalized = event.messages
         .map((msg) => this.normalizeMessage(msg))
@@ -121,28 +133,23 @@ export class BaileysClient extends EventEmitter<BaileysClientEvents> {
       this.socket.end(undefined);
       this.socket = null;
     }
+    this.phoneNumber = null;
+    this.pairingCodeRequested = false;
     this.setState({ status: 'disconnected' });
   }
-
-  // ── Internal ──────────────────────────────────────────────
 
   private setState(newState: ConnectionState): void {
     this.state = newState;
     this.emit('connection-state', newState);
   }
 
-  /**
-   * Convert a Baileys WAMessage to our ChatMessage.
-   * Returns null for messages we can't or don't want to summarize
-   * (images, stickers, protocol messages, etc.)
-   */
   private normalizeMessage(msg: WAMessage): ChatMessage | null {
     const body =
       msg.message?.conversation ||
       msg.message?.extendedTextMessage?.text ||
       null;
 
-    if (!body) return null; // Skip non-text messages
+    if (!body) return null;
 
     const chatId = msg.key.remoteJid;
     if (!chatId) return null;
