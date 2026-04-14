@@ -7,6 +7,7 @@ interface Props {
   chats: Chat[];
   connectionState: ConnectionState;
   onNavigateToChat: (chatId: string) => void;
+  revision?: number;
 }
 
 const TIME_RANGES = [
@@ -16,7 +17,7 @@ const TIME_RANGES = [
   { label: '7d', hours: 168 },
 ] as const;
 
-export function Dashboard({ chats, connectionState, onNavigateToChat }: Props) {
+export function Dashboard({ chats, connectionState, onNavigateToChat, revision = 0 }: Props) {
   const api = useApi();
   const [latestSummary, setLatestSummary] = useState<SummaryResult | null>(null);
   const [summarizingChat, setSummarizingChat] = useState<string | null>(null);
@@ -45,7 +46,7 @@ export function Dashboard({ chats, connectionState, onNavigateToChat }: Props) {
         setLatestSummary(found[0]);
       }
     })();
-  }, [api, chats.length]);
+  }, [api, chats.length, revision]);
 
   // Aggregate action items from all recent summaries
   const allActionItems = recentSummaries.flatMap((s) => s.actionItems);
