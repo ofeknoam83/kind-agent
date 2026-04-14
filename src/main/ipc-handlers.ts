@@ -1,42 +1,47 @@
 import { ipcMain, type BrowserWindow } from 'electron';
 import { ZodError } from 'zod';
 import { IpcChannels, IpcEvents, channelValidators } from '../shared/ipc';
-import type { SummarizeRequest } from '../shared/types';
-import { getDb } from '../db/connection';
-import { ChatRepository } from '../db/repositories/chat-repository';
-import { SummaryRepository } from '../db/repositories/summary-repository';
-import { ProviderRepository } from '../db/repositories/provider-repository';
-import { createProvider } from '../providers/provider-factory';
-import { BaileysClient } from '../connector/whatsapp/baileys-client';
-import { setApiKey, getAllApiKeys } from './keychain';
+import type { ChatMessage } from '../shared/types';
 
 /**
  * Registers all IPC handlers.
  *
- * Architecture:
- * - Every handler validates input via Zod before processing.
- * - Errors are caught and returned as structured { error: string } objects.
- * - The renderer NEVER gets raw stack traces in production.
- * - Handlers do NOT access the database directly — they go through repositories.
+ * DB and Baileys are initialized lazily on first use — not at import time.
+ * This prevents native module load failures from killing the entire app.
  */
-export function registerIpcHandlers(mainWindow: BrowserWindow): void {
+
+let _deps: ReturnType<typeof initDeps> | null = null;
+
+function getDeps(mainWindow: BrowserWindow) {
+  if (!_deps) {
+    _deps = initDeps(mainWindow);
+  }
+  return _deps;
+}
+
+function initDeps(mainWindow: BrowserWindow) {
+  // These imports happen at call time, not at module load time.
+  // This way if better-sqlite3 or baileys fail, we get a clear error
+  // instead of a white screen.
+  const { getDb } = require('../db/connection');
+  const { ChatRepository } = require('../db/repositories/chat-repository');
+  const { SummaryRepository } = require('../db/repositories/summary-repository');
+  const { ProviderRepository } = require('../db/repositories/provider-repository');
+  const { BaileysClient } = require('../connector/whatsapp/baileys-client');
+
   const db = getDb();
   const chatRepo = new ChatRepository(db);
   const summaryRepo = new SummaryRepository(db);
   const providerRepo = new ProviderRepository(db);
   const baileysClient = new BaileysClient();
 
-  // ── WhatsApp connection ──────────────────────────────────
-
-  // Forward connection state changes to renderer
-  baileysClient.on('connection-state', (state) => {
+  // Forward events to renderer
+  baileysClient.on('connection-state', (state: unknown) => {
     mainWindow.webContents.send(IpcEvents.WHATSAPP_STATE_CHANGED, state);
   });
 
-  // Forward new messages to renderer + persist to DB
-  baileysClient.on('messages', (messages) => {
-    // Group by chat and persist
-    const byChatId = new Map<string, typeof messages>();
+  baileysClient.on('messages', (messages: ChatMessage[]) => {
+    const byChatId = new Map<string, ChatMessage[]>();
     for (const msg of messages) {
       const existing = byChatId.get(msg.chatId) ?? [];
       existing.push(msg);
@@ -48,7 +53,7 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
       chatRepo.upsertChatWithMessages(
         {
           id: chatId,
-          name: msgs[0].senderName, // Will be overwritten by group name
+          name: msgs[0].senderName,
           isGroup: chatId.endsWith('@g.us'),
           lastMessageTimestamp: maxTs,
         },
@@ -59,8 +64,15 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     mainWindow.webContents.send(IpcEvents.NEW_MESSAGES, messages);
   });
 
+  return { chatRepo, summaryRepo, providerRepo, baileysClient };
+}
+
+export function registerIpcHandlers(mainWindow: BrowserWindow): void {
+  // ── WhatsApp connection ──────────────────────────────────
+
   ipcMain.handle(IpcChannels.WHATSAPP_CONNECT, async () => {
     try {
+      const { baileysClient } = getDeps(mainWindow);
       await baileysClient.connect();
       return { success: true };
     } catch (err) {
@@ -69,22 +81,38 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
   });
 
   ipcMain.handle(IpcChannels.WHATSAPP_DISCONNECT, async () => {
-    await baileysClient.disconnect();
-    return { success: true };
+    try {
+      const { baileysClient } = getDeps(mainWindow);
+      await baileysClient.disconnect();
+      return { success: true };
+    } catch (err) {
+      return { error: String(err) };
+    }
   });
 
   ipcMain.handle(IpcChannels.WHATSAPP_GET_STATE, () => {
-    return baileysClient.getState();
+    try {
+      const { baileysClient } = getDeps(mainWindow);
+      return baileysClient.getState();
+    } catch {
+      return { status: 'disconnected' };
+    }
   });
 
   // ── Chats ────────────────────────────────────────────────
 
   ipcMain.handle(IpcChannels.CHATS_LIST, () => {
-    return chatRepo.listChats();
+    try {
+      const { chatRepo } = getDeps(mainWindow);
+      return chatRepo.listChats();
+    } catch (err) {
+      return [];
+    }
   });
 
   ipcMain.handle(IpcChannels.CHATS_GET_MESSAGES, (_event, rawPayload: unknown) => {
     return withValidation('chats:get-messages', rawPayload, (payload) => {
+      const { chatRepo } = getDeps(mainWindow);
       return chatRepo.getMessages(payload.chatId, payload.limit, payload.beforeTimestamp);
     });
   });
@@ -93,8 +121,12 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
 
   ipcMain.handle(IpcChannels.SUMMARIZE_RUN, async (_event, rawPayload: unknown) => {
     return withValidation('summarize:run', rawPayload, async (payload) => {
+      const { chatRepo, summaryRepo, providerRepo } = getDeps(mainWindow);
+      const { createProvider } = require('../providers/provider-factory');
+      const { getAllApiKeys } = require('./keychain');
+
       const providerConfig = payload.provider
-        ? providerRepo.listAll().find((p) => p.type === payload.provider)
+        ? providerRepo.listAll().find((p: any) => p.type === payload.provider)
         : providerRepo.getActive();
 
       if (!providerConfig) {
@@ -104,7 +136,6 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
       const apiKeys = getAllApiKeys();
       const provider = createProvider(providerConfig, apiKeys);
 
-      // Get messages for summarization
       const messages = payload.afterTimestamp
         ? chatRepo.getMessagesAfter(payload.chatId, payload.afterTimestamp)
         : chatRepo.getMessages(payload.chatId, 2000);
@@ -113,10 +144,8 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
         throw new Error('No messages to summarize.');
       }
 
-      // Check for previous summary (incremental summarization)
       const latestSummary = summaryRepo.getLatestForChat(payload.chatId);
 
-      // Notify renderer that summarization is in progress
       mainWindow.webContents.send(IpcEvents.SUMMARIZE_PROGRESS, {
         chatId: payload.chatId,
         status: 'running',
@@ -125,11 +154,11 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
 
       const result = await provider.summarize({
         messages,
-        chatName: chatRepo.listChats().find((c) => c.id === payload.chatId)?.name ?? 'Unknown',
+        chatName: chatRepo.listChats().find((c: any) => c.id === payload.chatId)?.name ?? 'Unknown',
         previousSummary: latestSummary?.summary,
       });
 
-      const timestamps = messages.map((m) => m.timestamp);
+      const timestamps = messages.map((m: any) => m.timestamp);
       const id = summaryRepo.insert({
         chatId: payload.chatId,
         ...result,
@@ -150,12 +179,14 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
 
   ipcMain.handle(IpcChannels.SUMMARIZE_LIST, (_event, rawPayload: unknown) => {
     return withValidation('summarize:list', rawPayload, (payload) => {
+      const { summaryRepo } = getDeps(mainWindow);
       return summaryRepo.listByChat(payload.chatId, payload.limit);
     });
   });
 
   ipcMain.handle(IpcChannels.SUMMARIZE_GET, (_event, rawPayload: unknown) => {
     return withValidation('summarize:get', rawPayload, (payload) => {
+      const { summaryRepo } = getDeps(mainWindow);
       return summaryRepo.getById(payload.id);
     });
   });
@@ -163,37 +194,52 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
   // ── Providers ────────────────────────────────────────────
 
   ipcMain.handle(IpcChannels.PROVIDERS_LIST, () => {
-    return providerRepo.listAll();
+    try {
+      const { providerRepo } = getDeps(mainWindow);
+      return providerRepo.listAll();
+    } catch {
+      return [];
+    }
   });
 
   ipcMain.handle(IpcChannels.PROVIDERS_UPDATE, (_event, rawPayload: unknown) => {
     return withValidation('providers:update', rawPayload, (payload) => {
+      const { providerRepo } = getDeps(mainWindow);
       providerRepo.update(payload);
       return { success: true };
     });
   });
 
   ipcMain.handle(IpcChannels.PROVIDERS_HEALTH, async (_event, providerType?: string) => {
-    const configs = providerRepo.listAll();
-    const apiKeys = getAllApiKeys();
-    const results = [];
+    try {
+      const { providerRepo } = getDeps(mainWindow);
+      const { createProvider } = require('../providers/provider-factory');
+      const { getAllApiKeys } = require('./keychain');
 
-    for (const config of configs) {
-      if (providerType && config.type !== providerType) continue;
-      try {
-        const provider = createProvider(config, apiKeys);
-        const health = await provider.healthCheck();
-        results.push({ type: config.type, ...health });
-      } catch (err) {
-        results.push({ type: config.type, reachable: false, models: [], error: String(err) });
+      const configs = providerRepo.listAll();
+      const apiKeys = getAllApiKeys();
+      const results = [];
+
+      for (const config of configs) {
+        if (providerType && config.type !== providerType) continue;
+        try {
+          const provider = createProvider(config, apiKeys);
+          const health = await provider.healthCheck();
+          results.push({ type: config.type, ...health });
+        } catch (err) {
+          results.push({ type: config.type, reachable: false, models: [], error: String(err) });
+        }
       }
-    }
 
-    return results;
+      return results;
+    } catch (err) {
+      return [{ type: 'error', reachable: false, models: [], error: String(err) }];
+    }
   });
 
   ipcMain.handle(IpcChannels.PROVIDERS_SET_API_KEY, (_event, rawPayload: unknown) => {
     return withValidation('providers:set-api-key', rawPayload, (payload) => {
+      const { setApiKey } = require('./keychain');
       setApiKey(payload.provider, payload.apiKey);
       return { success: true };
     });

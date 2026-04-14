@@ -1,6 +1,5 @@
 import { app, BrowserWindow, session } from 'electron';
 import path from 'node:path';
-import { closeDb } from '../db/connection';
 import { registerIpcHandlers } from './ipc-handlers';
 
 // Enforce single instance — WhatsApp only allows one connection per device.
@@ -19,44 +18,42 @@ function createWindow(): void {
     minHeight: 600,
     titleBarStyle: 'hiddenInset', // macOS native look
     webPreferences: {
-      // ── SECURITY: These are non-negotiable ──────────────
-      preload: path.join(__dirname, '../preload/index.js'),
-      contextIsolation: true,    // Renderer can't access Node.js
-      nodeIntegration: false,    // No require() in renderer
-      sandbox: true,             // OS-level sandboxing
-      webSecurity: true,         // Enforce same-origin policy
+      preload: path.join(__dirname, 'preload.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
+      webSecurity: true,
       allowRunningInsecureContent: false,
-
-      // Disable features we don't need
       webviewTag: false,
       navigateOnDragDrop: false,
     },
   });
 
-  // ── Content Security Policy ──────────────────────────────
-  // Lock down what the renderer can load. No inline scripts, no eval,
-  // only connect to known local provider endpoints.
-  session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
-    callback({
-      responseHeaders: {
-        ...details.responseHeaders,
-        'Content-Security-Policy': [
-          [
-            "default-src 'self'",
-            "script-src 'self'",
-            "style-src 'self' 'unsafe-inline'", // Required for CSS-in-JS
-            "img-src 'self' data:", // QR codes are data URIs
-            "connect-src 'self'",
-            "font-src 'self'",
-            "object-src 'none'",
-            "base-uri 'self'",
-            "form-action 'none'",
-            "frame-ancestors 'none'",
-          ].join('; '),
-        ],
-      },
+  // ── CSP: only enforce in production ──────────────────────
+  // In dev, Vite injects scripts/websockets that CSP would block.
+  if (!MAIN_WINDOW_VITE_DEV_SERVER_URL) {
+    session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
+      callback({
+        responseHeaders: {
+          ...details.responseHeaders,
+          'Content-Security-Policy': [
+            [
+              "default-src 'self'",
+              "script-src 'self'",
+              "style-src 'self' 'unsafe-inline'",
+              "img-src 'self' data:",
+              "connect-src 'self'",
+              "font-src 'self'",
+              "object-src 'none'",
+              "base-uri 'self'",
+              "form-action 'none'",
+              "frame-ancestors 'none'",
+            ].join('; '),
+          ],
+        },
+      });
     });
-  });
+  }
 
   // ── Prevent navigation and new window creation ───────────
   mainWindow.webContents.on('will-navigate', (event) => {
@@ -67,12 +64,16 @@ function createWindow(): void {
     return { action: 'deny' };
   });
 
-  // Register IPC handlers (must happen before renderer loads)
-  registerIpcHandlers(mainWindow);
+  // Register IPC handlers
+  try {
+    registerIpcHandlers(mainWindow);
+  } catch (err) {
+    console.error('Failed to register IPC handlers:', err);
+  }
 
-  // Load the renderer.
-  // In development, Vite dev server; in production, the built HTML.
+  // Open DevTools in development
   if (MAIN_WINDOW_VITE_DEV_SERVER_URL) {
+    mainWindow.webContents.openDevTools({ mode: 'detach' });
     mainWindow.loadURL(MAIN_WINDOW_VITE_DEV_SERVER_URL);
   } else {
     mainWindow.loadFile(
@@ -86,12 +87,13 @@ function createWindow(): void {
 app.whenReady().then(createWindow);
 
 app.on('window-all-closed', () => {
-  closeDb();
+  try {
+    require('../db/connection').closeDb();
+  } catch { /* DB may not have been initialized */ }
   app.quit();
 });
 
 app.on('activate', () => {
-  // macOS: re-create window when dock icon is clicked
   if (BrowserWindow.getAllWindows().length === 0) {
     createWindow();
   }
