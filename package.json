@@ -17,7 +17,7 @@
     "db:migrate": "tsx scripts/migrate.ts"
   },
   "dependencies": {
-    "@whiskeysockets/baileys": "^6.7.21",
+    "@whiskeysockets/baileys": "^7.0.0-rc.9",
     "better-sqlite3": "^11.7.0",
     "qrcode": "^1.5.4",
     "zod": "^3.24.2"
