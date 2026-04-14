@@ -25,7 +25,6 @@ export default defineConfig({
         'link-preview-js',
         'long',
         'pino',
-        'qrcode',
         'sharp',
         'ws',
       ],

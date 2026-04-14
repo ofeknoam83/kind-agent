@@ -9,7 +9,7 @@ const { useMultiFileAuthState, DisconnectReason } = baileys;
 
 // @hapi/boom is externalized too
 const Boom = (require('@hapi/boom') as any).Boom ?? require('@hapi/boom');
-import * as QRCode from 'qrcode';
+import QRCode from 'qrcode';
 import path from 'node:path';
 import { app } from 'electron';
 import { EventEmitter } from 'node:events';
@@ -66,14 +66,12 @@ export class BaileysClient extends EventEmitter<BaileysClientEvents> {
 
       if (qr) {
         // Convert raw QR string to a scannable data URL
-        const toDataURL = (QRCode as any).toDataURL ?? (QRCode as any).default?.toDataURL;
-        if (toDataURL) {
-          toDataURL(qr, { width: 280, margin: 2 })
-            .then((url: string) => this.setState({ status: 'qr', qrData: url }))
-            .catch(() => this.setState({ status: 'qr', qrData: qr }));
-        } else {
-          this.setState({ status: 'qr', qrData: qr });
-        }
+        QRCode.toDataURL(qr, { width: 280, margin: 2 })
+          .then((url: string) => this.setState({ status: 'qr', qrData: url }))
+          .catch((err: unknown) => {
+            console.error('QR generation failed:', err);
+            this.setState({ status: 'qr', qrData: qr });
+          });
       }
 
       if (connection === 'close') {
