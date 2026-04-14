@@ -190,36 +190,51 @@ export function Dashboard({ chats, connectionState, onNavigateToChat }: Props) {
 
           {recentSummaries.length > 0 ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-              {recentSummaries.slice(0, 3).map((s, i) => (
-                <div key={i}>
-                  <div
-                    style={{
-                      fontSize: 12,
-                      fontWeight: 600,
-                      color: 'var(--accent)',
-                      marginBottom: 4,
-                      cursor: 'pointer',
-                    }}
-                    onClick={() => onNavigateToChat(s.chatId)}
-                  >
-                    {chats.find((c) => c.id === s.chatId)?.name || 'Chat'}
+              {recentSummaries.slice(0, 3).map((s, i) => {
+                const displayText = s.tldr || s.summary;
+                return (
+                  <div key={i}>
+                    <div
+                      style={{
+                        fontSize: 12,
+                        fontWeight: 600,
+                        color: 'var(--accent)',
+                        marginBottom: 4,
+                        cursor: 'pointer',
+                      }}
+                      onClick={() => onNavigateToChat(s.chatId)}
+                    >
+                      {chats.find((c) => c.id === s.chatId)?.name || 'Chat'}
+                    </div>
+                    <div
+                      style={{
+                        fontSize: 13,
+                        lineHeight: 1.6,
+                        color: 'var(--text-primary)',
+                        userSelect: 'text',
+                      }}
+                    >
+                      {displayText.length > 200 ? displayText.slice(0, 200) + '...' : displayText}
+                    </div>
+                    {s.tone && (
+                      <div
+                        style={{
+                          fontSize: 11,
+                          color: 'var(--text-secondary)',
+                          fontStyle: 'italic',
+                          marginTop: 2,
+                        }}
+                      >
+                        Tone: {s.tone}
+                      </div>
+                    )}
+                    <div style={{ fontSize: 10, color: 'var(--text-secondary)', marginTop: 4 }}>
+                      {new Date(s.createdAt * 1000).toLocaleTimeString()}
+                      {' \u00b7 '}{s.messageCount} msgs {'\u00b7'} {s.provider}/{s.model}
+                    </div>
                   </div>
-                  <div
-                    style={{
-                      fontSize: 13,
-                      lineHeight: 1.6,
-                      color: 'var(--text-primary)',
-                      userSelect: 'text',
-                    }}
-                  >
-                    {s.summary.length > 200 ? s.summary.slice(0, 200) + '...' : s.summary}
-                  </div>
-                  <div style={{ fontSize: 10, color: 'var(--text-secondary)', marginTop: 4 }}>
-                    {new Date(s.createdAt * 1000).toLocaleTimeString()}
-                    {' \u00b7 '}{s.messageCount} msgs \u00b7 {s.provider}/{s.model}
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           ) : (
             <div style={{ color: 'var(--text-secondary)', fontSize: 13 }}>
@@ -289,14 +304,41 @@ export function Dashboard({ chats, connectionState, onNavigateToChat }: Props) {
                   <div style={{ userSelect: 'text' }}>
                     {item.assignee && item.assignee !== 'null' && (
                       <span style={{ color: 'var(--accent)', fontWeight: 500 }}>
-                        {item.assignee}:{' '}
+                        [{item.assignee}]{' '}
+                      </span>
+                    )}
+                    {item.priority && (
+                      <span
+                        style={{
+                          fontSize: 10,
+                          fontWeight: 600,
+                          padding: '1px 6px',
+                          borderRadius: 4,
+                          marginRight: 4,
+                          textTransform: 'uppercase',
+                          letterSpacing: 0.5,
+                          background:
+                            item.priority === 'high'
+                              ? 'rgba(231, 76, 60, 0.15)'
+                              : item.priority === 'medium'
+                              ? 'rgba(243, 156, 18, 0.15)'
+                              : 'rgba(52, 152, 219, 0.15)',
+                          color:
+                            item.priority === 'high'
+                              ? '#e74c3c'
+                              : item.priority === 'medium'
+                              ? '#f39c12'
+                              : '#3498db',
+                        }}
+                      >
+                        {item.priority}
                       </span>
                     )}
                     <span style={{ color: 'var(--text-primary)' }}>{item.description}</span>
                     {item.deadline && item.deadline !== 'null' && (
                       <span style={{ color: 'var(--text-secondary)', fontSize: 11 }}>
                         {' '}
-                        (by {item.deadline})
+                        &rarr; by {item.deadline}
                       </span>
                     )}
                   </div>

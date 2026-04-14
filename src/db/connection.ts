@@ -61,6 +61,7 @@ function runMigrations(database: Database.Database): void {
       summary           TEXT NOT NULL,
       action_items      TEXT NOT NULL DEFAULT '[]',
       unresolved_questions TEXT NOT NULL DEFAULT '[]',
+      extra_data        TEXT NOT NULL DEFAULT '{}',
       provider          TEXT NOT NULL,
       model             TEXT NOT NULL,
       message_count     INTEGER NOT NULL,
@@ -84,6 +85,13 @@ function runMigrations(database: Database.Database): void {
       ('lmstudio', 'LM Studio', 'http://localhost:1234/v1',     'default',       0),
       ('ollama',   'Ollama',    'http://localhost:11434',        'llama3.2',      1);
   `);
+
+  // Migration: add extra_data column for existing databases
+  const columns = database.pragma('table_info(summaries)') as Array<{ name: string }>;
+  const hasExtraData = columns.some((col) => col.name === 'extra_data');
+  if (!hasExtraData) {
+    database.exec(`ALTER TABLE summaries ADD COLUMN extra_data TEXT NOT NULL DEFAULT '{}'`);
+  }
 }
 
 /**

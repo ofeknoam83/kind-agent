@@ -101,28 +101,8 @@ export function SummaryPanel({ chatId }: Props) {
 
       {latest && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14, marginTop: 4 }}>
-          {/* What Matters card */}
-          <div
-            style={{
-              background: 'var(--bg-primary)',
-              border: '1px solid var(--border)',
-              borderRadius: 10,
-              padding: 16,
-            }}
-          >
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 6,
-                marginBottom: 10,
-              }}
-            >
-              <span style={{ fontSize: 13 }}>{'\u2728'}</span>
-              <h4 style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>
-                What Matters
-              </h4>
-            </div>
+          {/* TL;DR card */}
+          <SummaryCard icon="*" title="TL;DR">
             <div
               style={{
                 fontSize: 13,
@@ -131,33 +111,78 @@ export function SummaryPanel({ chatId }: Props) {
                 userSelect: 'text',
               }}
             >
-              {latest.summary}
+              {latest.tldr || latest.summary}
             </div>
-          </div>
+          </SummaryCard>
 
-          {/* Action Items card */}
-          {latest.actionItems.length > 0 && (
-            <div
-              style={{
-                background: 'var(--bg-primary)',
-                border: '1px solid var(--border)',
-                borderRadius: 10,
-                padding: 16,
-              }}
-            >
-              <div
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 6,
-                  marginBottom: 10,
-                }}
-              >
-                <span style={{ fontSize: 13 }}>{'\u26a1'}</span>
-                <h4 style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>
-                  Action Items
-                </h4>
+          {/* Key Topics */}
+          {latest.keyTopics?.length > 0 && (
+            <SummaryCard icon="#" title="Key Topics">
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                {latest.keyTopics.map((topic, i) => (
+                  <span
+                    key={i}
+                    style={{
+                      fontSize: 12,
+                      padding: '3px 10px',
+                      borderRadius: 12,
+                      background: 'rgba(37, 211, 102, 0.1)',
+                      color: 'var(--accent)',
+                      userSelect: 'text',
+                    }}
+                  >
+                    {topic}
+                  </span>
+                ))}
               </div>
+            </SummaryCard>
+          )}
+
+          {/* Decisions Made */}
+          {latest.decisionsMade?.length > 0 && (
+            <SummaryCard icon=">" title="Decisions Made">
+              {latest.decisionsMade.map((d, i) => (
+                <div
+                  key={i}
+                  style={{
+                    fontSize: 13,
+                    color: 'var(--text-primary)',
+                    marginBottom: 6,
+                    paddingLeft: 8,
+                    borderLeft: '2px solid var(--accent)',
+                    userSelect: 'text',
+                  }}
+                >
+                  {d}
+                </div>
+              ))}
+            </SummaryCard>
+          )}
+
+          {/* Open Questions */}
+          {latest.unresolvedQuestions.length > 0 && (
+            <SummaryCard icon="?" title="Open Questions">
+              {latest.unresolvedQuestions.map((q, i) => (
+                <div
+                  key={i}
+                  style={{
+                    fontSize: 13,
+                    color: 'var(--text-secondary)',
+                    marginBottom: 6,
+                    paddingLeft: 8,
+                    borderLeft: '2px solid var(--border)',
+                    userSelect: 'text',
+                  }}
+                >
+                  {q}
+                </div>
+              ))}
+            </SummaryCard>
+          )}
+
+          {/* Action Items */}
+          {latest.actionItems.length > 0 && (
+            <SummaryCard icon="!" title="Action Items">
               {latest.actionItems.map((item, i) => (
                 <div
                   key={i}
@@ -179,64 +204,103 @@ export function SummaryPanel({ chatId }: Props) {
                       marginTop: 2,
                     }}
                   />
-                  <div style={{ userSelect: 'text' }}>
+                  <div style={{ userSelect: 'text', flex: 1 }}>
                     {item.assignee && item.assignee !== 'null' && (
                       <span style={{ color: 'var(--accent)', fontWeight: 500 }}>
-                        {item.assignee}:{' '}
+                        [{item.assignee}]{' '}
                       </span>
+                    )}
+                    {item.priority && (
+                      <PriorityBadge priority={item.priority} />
                     )}
                     <span>{item.description}</span>
                     {item.deadline && item.deadline !== 'null' && (
                       <span style={{ color: 'var(--text-secondary)', fontSize: 11 }}>
                         {' '}
-                        (by {item.deadline})
+                        &rarr; by {item.deadline}
                       </span>
                     )}
                   </div>
                 </div>
               ))}
-            </div>
+            </SummaryCard>
           )}
 
-          {/* Unresolved Questions card */}
-          {latest.unresolvedQuestions.length > 0 && (
-            <div
-              style={{
-                background: 'var(--bg-primary)',
-                border: '1px solid var(--border)',
-                borderRadius: 10,
-                padding: 16,
-              }}
-            >
-              <div
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 6,
-                  marginBottom: 10,
-                }}
-              >
-                <span style={{ fontSize: 13 }}>?</span>
-                <h4 style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>
-                  Unresolved Questions
-                </h4>
-              </div>
-              {latest.unresolvedQuestions.map((q, i) => (
+          {/* Expected From Me */}
+          {latest.expectedFromMe?.length > 0 && (
+            <SummaryCard icon="@" title="Expected From Me">
+              {latest.expectedFromMe.map((e, i) => (
                 <div
                   key={i}
                   style={{
                     fontSize: 13,
-                    color: 'var(--text-secondary)',
+                    color: 'var(--text-primary)',
                     marginBottom: 6,
                     paddingLeft: 8,
-                    borderLeft: '2px solid var(--border)',
+                    borderLeft: '2px solid #f39c12',
                     userSelect: 'text',
                   }}
                 >
-                  {q}
+                  {e}
                 </div>
               ))}
-            </div>
+            </SummaryCard>
+          )}
+
+          {/* Risks / Issues */}
+          {latest.risks?.length > 0 && (
+            <SummaryCard icon="!" title="Risks / Issues">
+              {latest.risks.map((r, i) => (
+                <div
+                  key={i}
+                  style={{
+                    fontSize: 13,
+                    color: 'var(--danger, #e74c3c)',
+                    marginBottom: 6,
+                    paddingLeft: 8,
+                    borderLeft: '2px solid var(--danger, #e74c3c)',
+                    userSelect: 'text',
+                  }}
+                >
+                  {r}
+                </div>
+              ))}
+            </SummaryCard>
+          )}
+
+          {/* Useful Context */}
+          {latest.usefulContext?.length > 0 && (
+            <SummaryCard icon="i" title="Useful Context">
+              {latest.usefulContext.map((c, i) => (
+                <div
+                  key={i}
+                  style={{
+                    fontSize: 12,
+                    color: 'var(--text-secondary)',
+                    marginBottom: 4,
+                    userSelect: 'text',
+                  }}
+                >
+                  {c}
+                </div>
+              ))}
+            </SummaryCard>
+          )}
+
+          {/* Tone / Sentiment */}
+          {latest.tone && (
+            <SummaryCard icon="~" title="Tone / Sentiment">
+              <div
+                style={{
+                  fontSize: 13,
+                  color: 'var(--text-secondary)',
+                  fontStyle: 'italic',
+                  userSelect: 'text',
+                }}
+              >
+                {latest.tone}
+              </div>
+            </SummaryCard>
           )}
 
           {/* Meta line */}
@@ -247,5 +311,85 @@ export function SummaryPanel({ chatId }: Props) {
         </div>
       )}
     </div>
+  );
+}
+
+// ── Helper components ──────────────────────────────────────
+
+function SummaryCard({
+  icon,
+  title,
+  children,
+}: {
+  icon: string;
+  title: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div
+      style={{
+        background: 'var(--bg-primary)',
+        border: '1px solid var(--border)',
+        borderRadius: 10,
+        padding: 16,
+      }}
+    >
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 6,
+          marginBottom: 10,
+        }}
+      >
+        <span
+          style={{
+            fontSize: 11,
+            fontWeight: 700,
+            width: 20,
+            height: 20,
+            borderRadius: 4,
+            background: 'rgba(37, 211, 102, 0.12)',
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: 'var(--accent)',
+          }}
+        >
+          {icon}
+        </span>
+        <h4 style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>
+          {title}
+        </h4>
+      </div>
+      {children}
+    </div>
+  );
+}
+
+const PRIORITY_COLORS: Record<string, { bg: string; text: string }> = {
+  high: { bg: 'rgba(231, 76, 60, 0.15)', text: '#e74c3c' },
+  medium: { bg: 'rgba(243, 156, 18, 0.15)', text: '#f39c12' },
+  low: { bg: 'rgba(52, 152, 219, 0.15)', text: '#3498db' },
+};
+
+function PriorityBadge({ priority }: { priority: string }) {
+  const colors = PRIORITY_COLORS[priority] ?? { bg: 'rgba(127,127,127,0.15)', text: '#888' };
+  return (
+    <span
+      style={{
+        fontSize: 10,
+        fontWeight: 600,
+        padding: '1px 6px',
+        borderRadius: 4,
+        background: colors.bg,
+        color: colors.text,
+        marginRight: 4,
+        textTransform: 'uppercase',
+        letterSpacing: 0.5,
+      }}
+    >
+      {priority}
+    </span>
   );
 }
