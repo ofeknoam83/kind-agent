@@ -114,10 +114,42 @@ export class BaileysClient extends EventEmitter<BaileysClientEvents> {
     // ── Credential persistence ─────────────────────────────
     socket.ev.on('creds.update', saveCreds);
 
-    // ── Incoming messages ──────────────────────────────────
-    socket.ev.on('messages.upsert', (event: BaileysEventMap['messages.upsert']) => {
-      if (event.type !== 'notify') return;
+    // ── History sync (bulk chat + message data on first connect) ──
+    socket.ev.on('messaging-history.set', (event) => {
+      console.log(`[BAILEYS] History sync: ${event.chats.length} chats, ${event.messages.length} messages`);
 
+      // Emit messages from history
+      const normalized = event.messages
+        .map((msg) => this.normalizeMessage(msg))
+        .filter((m): m is ChatMessage => m !== null);
+
+      if (normalized.length > 0) {
+        this.emit('messages', normalized);
+      }
+
+      // Emit chat metadata (name, group status)
+      for (const chat of event.chats) {
+        if (chat.id && chat.name) {
+          // Emit a synthetic message to register the chat in the DB
+          this.emit('messages', [{
+            id: `chat-meta-${chat.id}`,
+            chatId: chat.id,
+            senderJid: 'system',
+            senderName: chat.name,
+            body: '', // Empty body — just registers the chat
+            timestamp: chat.conversationTimestamp
+              ? typeof chat.conversationTimestamp === 'number'
+                ? chat.conversationTimestamp
+                : Number(chat.conversationTimestamp)
+              : Math.floor(Date.now() / 1000),
+            fromMe: false,
+          }]);
+        }
+      }
+    });
+
+    // ── New incoming messages ──────────────────────────────
+    socket.ev.on('messages.upsert', (event: BaileysEventMap['messages.upsert']) => {
       const normalized = event.messages
         .map((msg) => this.normalizeMessage(msg))
         .filter((m): m is ChatMessage => m !== null);
