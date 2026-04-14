@@ -14,7 +14,11 @@ export class ChatRepository {
         INSERT INTO chats (id, name, is_group, last_msg_ts)
         VALUES (@id, @name, @isGroup, @lastMsgTs)
         ON CONFLICT(id) DO UPDATE SET
-          name = excluded.name,
+          name = CASE
+            WHEN excluded.name NOT IN ('Unknown', 'Group') THEN excluded.name
+            WHEN chats.name IN ('Unknown', 'Group') THEN excluded.name
+            ELSE chats.name
+          END,
           last_msg_ts = MAX(chats.last_msg_ts, excluded.last_msg_ts)
       `),
 
