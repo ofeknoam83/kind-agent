@@ -137,6 +137,89 @@ function runMigrations(database: Database.Database): void {
       0
     )
   `);
+
+  // Backfill: populate action_items table from existing summaries' JSON
+  backfillActionItems(database);
+}
+
+/**
+ * Populate the action_items table from existing summaries that have
+ * action items in their JSON column but no corresponding rows in action_items.
+ */
+function backfillActionItems(database: Database.Database): void {
+  const count = (database.prepare(
+    `SELECT COUNT(*) as cnt FROM action_items`
+  ).get() as { cnt: number }).cnt;
+  if (count > 0) return; // Already populated
+
+  const summaries = database.prepare(`
+    SELECT id, chat_id, action_items, created_at FROM summaries
+    WHERE action_items != '[]'
+    ORDER BY created_at DESC
+  `).all() as Array<{ id: number; chat_id: string; action_items: string; created_at: number }>;
+
+  if (summaries.length === 0) return;
+
+  const insert = database.prepare(`
+    INSERT OR IGNORE INTO action_items
+      (summary_id, chat_id, description, assignee, deadline, priority, confidence, fingerprint, created_at)
+    VALUES
+      (@summaryId, @chatId, @description, @assignee, @deadline, @priority, @confidence, @fingerprint, @createdAt)
+  `);
+
+  const tx = database.transaction(() => {
+    for (const row of summaries) {
+      let items: Array<{
+        description?: string;
+        assignee?: string | null;
+        deadline?: string | null;
+        priority?: string | null;
+        confidence?: number;
+      }>;
+      try {
+        items = JSON.parse(row.action_items);
+        if (!Array.isArray(items)) continue;
+      } catch { continue; }
+
+      for (const item of items) {
+        if (!item.description || item.description.length < 3) continue;
+        const desc = String(item.description);
+        // Simple fingerprint matching the repository's logic
+        const normalized = desc.toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, '').replace(/\s+/g, ' ').trim().slice(0, 120);
+        let hash = 0;
+        for (let i = 0; i < normalized.length; i++) {
+          hash = ((hash << 5) - hash + normalized.charCodeAt(i)) | 0;
+        }
+        const fp = `${row.chat_id.slice(0, 20)}:${hash.toString(36)}`;
+
+        const assignee = item.assignee && item.assignee !== 'null' && item.assignee !== 'None'
+          ? String(item.assignee) : null;
+        const deadline = item.deadline && item.deadline !== 'null' && item.deadline !== 'None'
+          ? String(item.deadline) : null;
+        const validPriorities = new Set(['high', 'medium', 'low']);
+        const priority = typeof item.priority === 'string' && validPriorities.has(item.priority.toLowerCase())
+          ? item.priority.toLowerCase() : null;
+
+        insert.run({
+          summaryId: row.id,
+          chatId: row.chat_id,
+          description: desc,
+          assignee,
+          deadline,
+          priority,
+          confidence: item.confidence ?? 3,
+          fingerprint: fp,
+          createdAt: row.created_at,
+        });
+      }
+    }
+  });
+  tx();
+
+  const inserted = (database.prepare(
+    `SELECT COUNT(*) as cnt FROM action_items`
+  ).get() as { cnt: number }).cnt;
+  console.log(`[DB] Backfilled ${inserted} action items from existing summaries`);
 }
 
 /**
