@@ -67,7 +67,7 @@ Produce a JSON response with exactly this structure:
     }
   ],
   "expectedFromMe": [
-    "Explicit or implicit expectation on the reader / user"
+    "Things explicitly requested from ME (the person reading this summary)"
   ],
   "risks": [
     "Blockers, confusion, delays, or issues raised"
@@ -82,11 +82,35 @@ Rules:
 - Output ONLY valid JSON. No markdown, no code fences, no explanation.
 - If any section has no items, return an empty array (or empty string for tone/tldr).
 - Preserve the original language of the conversation in all output.
-- For actionItems: attribute to specific people when possible. Set priority to "high", "medium", or "low" based on urgency/importance. Use null if unclear.
-- For expectedFromMe: think about what the reader of this summary would be expected to do, both explicitly stated and implicitly implied.
-- For risks: highlight any blockers, sources of confusion, potential delays, or misalignments.
-- For tone: describe the overall sentiment (e.g. "Collaborative and upbeat", "Tense, with frustration from X about Y").
-- Be concise but complete. Do not invent information not present in the conversation.`;
+- Be concise but complete. Do not invent information not present in the conversation.
+
+CRITICAL — Understand intent, not just text:
+WhatsApp conversations often include PASTED/FORWARDED content that is NOT part of the conversation itself. You MUST recognize these patterns:
+- Someone pastes a draft message they plan to send to someone else, then asks "can I send?", "what do you think?", "approve?" → The pasted content is a DRAFT FOR REVIEW. The actual conversation is about approving the draft. Do NOT extract action items or expectations from the draft's content.
+- Someone forwards a message from another chat → The forwarded content is CONTEXT, not an action item.
+- Someone shares a screenshot or long text block followed by a short reaction → The block is SHARED CONTENT, the reaction is the real conversation.
+- When someone says "sent!" after sharing a draft → The action is ALREADY DONE, not pending.
+
+Action items — STRICT rules:
+- ONLY extract action items that someone in the conversation EXPLICITLY committed to, was directly asked to do, or was assigned.
+- A real action item: "I'll do X", "Can you handle Y?", "Please send the report by Friday".
+- NOT an action item: content inside a pasted draft, text from a forwarded message, things mentioned in passing, things already completed ("sent!", "done!", "handled").
+- Do NOT infer tasks that were never discussed. If no one asked for it, it's not an action item.
+- When in doubt, leave it out. Fewer accurate items are far better than hallucinated ones.
+- Attribute to specific people when possible. Set priority based on urgency/importance. Use null if unclear.
+
+expectedFromMe — STRICT rules:
+- "Me" is the person READING this summary (the app user). They may or may not be a participant in the conversation.
+- ONLY include things that were explicitly directed at the reader or that the reader clearly needs to act on.
+- If someone in the group asks another specific person to do something, that is NOT "expected from me" unless "me" is that specific person.
+- General group requests like "everyone please..." or tasks clearly waiting on the reader qualify.
+- When in doubt, return an empty array. Do not guess.
+
+Risks:
+- Highlight any blockers, sources of confusion, potential delays, or misalignments.
+
+Tone:
+- Describe the overall sentiment (e.g. "Collaborative and upbeat", "Tense, with frustration from X about Y").`;
 
 /**
  * Format a message array into a transcript string for the LLM.

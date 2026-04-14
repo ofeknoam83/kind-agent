@@ -119,6 +119,16 @@ export function Dashboard({ chats, connectionState, onNavigateToChat, revision =
     }
   };
 
+  const relativeTime = (ts: number): string => {
+    if (!ts) return '';
+    const diff = Math.floor(Date.now() / 1000) - ts;
+    if (diff < 60) return 'just now';
+    if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+    if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+    if (diff < 604800) return `${Math.floor(diff / 86400)}d ago`;
+    return new Date(ts * 1000).toLocaleDateString();
+  };
+
   const getGreeting = () => {
     const hour = new Date().getHours();
     if (hour < 12) return 'Good morning';
@@ -535,8 +545,9 @@ export function Dashboard({ chats, connectionState, onNavigateToChat, revision =
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {[...chats]
+              .filter((c) => c.messageCount > 0)
               .sort((a, b) => b.lastMessageTimestamp - a.lastMessageTimestamp)
-              .slice(0, 6)
+              .slice(0, 10)
               .map((chat) => (
                 <div
                   key={chat.id}
@@ -588,6 +599,9 @@ export function Dashboard({ chats, connectionState, onNavigateToChat, revision =
                     >
                       {chat.messageCount} messages
                       {chat.isGroup ? ' \u00b7 Group' : ''}
+                      {chat.lastMessageTimestamp > 0 && (
+                        <> &middot; {relativeTime(chat.lastMessageTimestamp)}</>
+                      )}
                     </div>
                   </div>
                   <div style={{ display: 'flex', gap: 6 }}>

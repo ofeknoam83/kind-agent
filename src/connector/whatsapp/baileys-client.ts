@@ -190,7 +190,7 @@ export class BaileysClient extends EventEmitter<BaileysClientEvents> {
             senderJid: 'chat-meta',
             senderName: name,
             body: '',
-            timestamp: lastTs || Math.floor(Date.now() / 1000),
+            timestamp: lastTs,
             fromMe: false,
           }]);
         }
@@ -213,7 +213,7 @@ export class BaileysClient extends EventEmitter<BaileysClientEvents> {
                     senderJid: 'chat-meta',
                     senderName: meta.subject,
                     body: '',
-                    timestamp: Math.floor(Date.now() / 1000),
+                    timestamp: 0,
                     fromMe: false,
                   }]);
                 }
@@ -242,7 +242,7 @@ export class BaileysClient extends EventEmitter<BaileysClientEvents> {
               senderJid: 'chat-meta',
               senderName: name,
               body: '',
-              timestamp: Math.floor(Date.now() / 1000),
+              timestamp: 0,
               fromMe: false,
             }]);
           }
@@ -260,7 +260,7 @@ export class BaileysClient extends EventEmitter<BaileysClientEvents> {
             senderJid: 'chat-meta',
             senderName: update.subject,
             body: '',
-            timestamp: Math.floor(Date.now() / 1000),
+            timestamp: 0,
             fromMe: false,
           }]);
         }
