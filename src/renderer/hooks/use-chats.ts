@@ -12,11 +12,13 @@ export function useChats() {
   const [selectedChatId, setSelectedChatId] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [loadingMessages, setLoadingMessages] = useState(false);
+  const [revision, setRevision] = useState(0);
 
   // Load chat list
   const refreshChats = useCallback(async () => {
     const result = await api.chats.list();
     setChats(result);
+    setRevision((r) => r + 1);
   }, [api]);
 
   useEffect(() => {
@@ -43,5 +45,5 @@ export function useChats() {
     [api]
   );
 
-  return { chats, selectedChatId, selectChat, messages, loadingMessages, refreshChats };
+  return { chats, selectedChatId, selectChat, messages, loadingMessages, refreshChats, revision };
 }
