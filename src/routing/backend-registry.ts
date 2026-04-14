@@ -17,7 +17,7 @@ import type { BackendProfile } from './types';
 const DEFAULT_PROFILES: BackendProfile[] = [
   {
     type: 'ollama',
-    label: 'Ollama / llama3.2:8b',
+    label: 'Ollama / llama3.2',
     maxContextTokens: 8192,
     isLocal: true,
     baseQuality: 0.55,

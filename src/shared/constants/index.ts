@@ -10,7 +10,7 @@ export const DEFAULT_PROVIDERS = {
   },
   ollama: {
     baseUrl: 'http://localhost:11434',
-    model: 'llama3.2:8b',
+    model: 'llama3.2',
   },
 } as const;
 
