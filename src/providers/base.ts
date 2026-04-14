@@ -88,9 +88,11 @@ export function parseProviderResponse(raw: string): SummarizeOutput {
     summary: String(parsed.summary ?? ''),
     actionItems: Array.isArray(parsed.actionItems)
       ? parsed.actionItems.map((item: Record<string, unknown>) => ({
-          assignee: item.assignee ? String(item.assignee) : null,
+          assignee: item.assignee && item.assignee !== 'null' && item.assignee !== 'None'
+            ? String(item.assignee) : null,
           description: String(item.description ?? ''),
-          deadline: item.deadline ? String(item.deadline) : null,
+          deadline: item.deadline && item.deadline !== 'null' && item.deadline !== 'None'
+            ? String(item.deadline) : null,
         }))
       : [],
     unresolvedQuestions: Array.isArray(parsed.unresolvedQuestions)

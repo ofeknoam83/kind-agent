@@ -287,13 +287,13 @@ export function Dashboard({ chats, connectionState, onNavigateToChat }: Props) {
                     }}
                   />
                   <div style={{ userSelect: 'text' }}>
-                    {item.assignee && (
+                    {item.assignee && item.assignee !== 'null' && (
                       <span style={{ color: 'var(--accent)', fontWeight: 500 }}>
                         {item.assignee}:{' '}
                       </span>
                     )}
                     <span style={{ color: 'var(--text-primary)' }}>{item.description}</span>
-                    {item.deadline && (
+                    {item.deadline && item.deadline !== 'null' && (
                       <span style={{ color: 'var(--text-secondary)', fontSize: 11 }}>
                         {' '}
                         (by {item.deadline})
