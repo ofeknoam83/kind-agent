@@ -82,7 +82,7 @@ function CategoryCard({
 
   // Collect top action items (high first, then medium, max 3)
   const allActions: ActionWithContext[] = summaries.flatMap((s) =>
-    s.actionItems
+    (Array.isArray(s.actionItems) ? s.actionItems : [])
       .filter((item) => item.priority === 'high' || item.priority === 'medium')
       .map((item) => ({ item, chatId: s.chatId, chatName: chatNameById(s.chatId) }))
   );
@@ -318,7 +318,7 @@ export function Dashboard({
     try {
       const since24h = Math.floor(Date.now() / 1000) - 86400;
       const summaries = await api.summarize.recent(since24h, 50);
-      setRecentSummaries(summaries);
+      setRecentSummaries(Array.isArray(summaries) ? summaries : []);
     } catch {
       // Silently handle
     }

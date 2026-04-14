@@ -17,7 +17,7 @@ export function useChats() {
   // Load chat list
   const refreshChats = useCallback(async () => {
     const result = await api.chats.list();
-    setChats(result);
+    setChats(Array.isArray(result) ? result : []);
     setRevision((r) => r + 1);
   }, [api]);
 
@@ -37,7 +37,7 @@ export function useChats() {
       setLoadingMessages(true);
       try {
         const msgs = await api.chats.getMessages(chatId, 500);
-        setMessages(msgs);
+        setMessages(Array.isArray(msgs) ? msgs : []);
       } finally {
         setLoadingMessages(false);
       }
