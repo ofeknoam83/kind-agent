@@ -24,6 +24,13 @@ export interface SummarizeInput {
   isGroup: boolean;
   /** Previous summary to build on (incremental summarization). */
   previousSummary?: string;
+  /** Structured context from previous summary + tracked action items. */
+  previousContext?: {
+    tldr: string;
+    openActionItems: Array<{ assignee: string | null; description: string }>;
+    recentDecisions: string[];
+    unresolvedQuestions: string[];
+  };
 }
 
 export interface SummarizeOutput {
@@ -66,7 +73,8 @@ Produce a JSON response with exactly this structure:
       "assignee": "Person name or null if unassigned",
       "description": "What needs to be done",
       "deadline": "Mentioned deadline or null",
-      "priority": "high | medium | low or null if unclear"
+      "priority": "high | medium | low or null if unclear",
+      "confidence": 5
     }
   ],
   "expectedFromMe": [
@@ -107,6 +115,23 @@ Action items — STRICT rules:
   GOOD: "Alexandra needs to review the new checkout flow — there are bugs with the clickable upgrade button and items not being added to cart"
   BAD: "Schedule a meeting"
   GOOD: "Yoav to schedule a follow-up call with Asi this week to discuss growth goals and bottlenecks"
+- confidence: Rate 1-5 how certain you are this is a REAL, actionable item:
+  5 = Someone explicitly said "I will do X" or "Please do X by Friday"
+  4 = Clearly implied by the conversation ("Can someone handle this?")
+  3 = Reasonable inference from context
+  2 = Possible but uncertain
+  1 = Speculative or from forwarded/draft content
+  Only items with confidence >= 4 should be priority "high".
+
+Previous context:
+- When previous summary context is provided, use it for CONTINUITY.
+- If existing tracked action items are listed, do NOT re-generate them. Only add genuinely NEW items.
+- If a previously tracked item is now resolved, do not include it again.
+- The TL;DR should be SELF-CONTAINED: someone reading just the summary should understand what is happening.
+
+Media messages:
+- When you see [Image shared], [Video shared], etc., do NOT invent content for the media.
+- Only reference what participants said ABOUT it in their messages.
 
 expectedFromMe — STRICT rules:
 - "Me" is the person READING this summary (the app user). They may or may not be a participant in the conversation.
@@ -164,6 +189,33 @@ export function formatTranscript(messages: ChatMessage[], chatName: string, isGr
 }
 
 /**
+ * Format previous summary context as a structured block for the LLM.
+ */
+export function formatPreviousContext(ctx: NonNullable<SummarizeInput['previousContext']>): string {
+  const parts: string[] = ['=== PREVIOUS CONTEXT ==='];
+
+  if (ctx.tldr) parts.push(`Previous TL;DR: ${ctx.tldr}`);
+
+  if (ctx.recentDecisions.length > 0) {
+    parts.push(`Decisions already made: ${ctx.recentDecisions.join('; ')}`);
+  }
+
+  if (ctx.unresolvedQuestions.length > 0) {
+    parts.push(`Still unresolved: ${ctx.unresolvedQuestions.join('; ')}`);
+  }
+
+  if (ctx.openActionItems.length > 0) {
+    parts.push('Tracked action items (do NOT repeat these — only add NEW ones):');
+    for (const a of ctx.openActionItems) {
+      parts.push(`  - ${a.assignee ? `[${a.assignee}] ` : ''}${a.description}`);
+    }
+  }
+
+  parts.push('=== END PREVIOUS CONTEXT ===', '');
+  return parts.join('\n');
+}
+
+/**
  * Parse the LLM's JSON response into structured output.
  * Handles common LLM quirks (markdown fences, trailing commas).
  */
@@ -205,6 +257,7 @@ export function parseProviderResponse(raw: string): SummarizeOutput {
             ? String(item.deadline) : null,
           priority: typeof item.priority === 'string' && validPriorities.has(item.priority.toLowerCase())
             ? item.priority.toLowerCase() as 'high' | 'medium' | 'low' : null,
+          confidence: typeof item.confidence === 'number' ? Math.max(1, Math.min(5, item.confidence)) : 3,
         }))
       : [],
     unresolvedQuestions: Array.isArray(parsed.unresolvedQuestions)

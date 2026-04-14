@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react';
-import type { Chat, SummaryResult, ActionItem } from '../../shared/types';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import type { Chat, SummaryResult, TrackedActionItem } from '../../shared/types';
 import type { ConnectionState } from '../../shared/types';
 import { useApi } from '../hooks/use-api';
 
@@ -33,8 +33,6 @@ const PRIORITY_COLORS: Record<string, { bg: string; fg: string }> = {
   low: { bg: 'rgba(52, 152, 219, 0.15)', fg: '#3498db' },
 };
 
-// ── Helpers ───────────────────────────────────────────────
-
 function relativeTime(ts: number): string {
   if (!ts) return '';
   const diff = Math.floor(Date.now() / 1000) - ts;
@@ -45,154 +43,134 @@ function relativeTime(ts: number): string {
   return new Date(ts * 1000).toLocaleDateString();
 }
 
-// ── Per-Chat Summary Card ─────────────────────────────────
-function ChatSummaryCard({
-  summary,
-  chat,
+// ── Interactive Action Item Row ───────────────────────────
+function ActionItemRow({
+  item,
+  chatName,
   onNavigateToChat,
+  onMarkDone,
+  onDismiss,
 }: {
-  summary: SummaryResult;
-  chat: Chat | undefined;
+  item: TrackedActionItem;
+  chatName: string;
   onNavigateToChat: (id: string) => void;
+  onMarkDone: (id: number) => void;
+  onDismiss: (id: number) => void;
 }) {
-  const [expanded, setExpanded] = useState(true);
-  const chatName = chat?.name || 'Chat';
-  const category = chat?.category;
-  const catColor = category ? CATEGORY_COLORS[category] || '#666' : '#888';
-
-  const actionItems = (Array.isArray(summary.actionItems) ? summary.actionItems : [])
-    .filter((item) => item.priority === 'high' || item.priority === 'medium');
-
-  if (!summary.tldr && actionItems.length === 0) return null;
+  const isDone = item.status === 'done';
+  const c = item.priority ? PRIORITY_COLORS[item.priority] || PRIORITY_COLORS.low : null;
+  const catColor = CATEGORY_COLORS['Work'] || '#888'; // fallback
 
   return (
     <div
       style={{
-        background: 'var(--bg-secondary)',
-        border: `1px solid ${catColor}33`,
-        borderLeft: `4px solid ${catColor}`,
-        borderRadius: 10,
-        padding: '16px 20px',
-        marginBottom: 12,
+        display: 'flex',
+        alignItems: 'flex-start',
+        gap: 8,
+        padding: '8px 0',
+        fontSize: 13,
+        lineHeight: 1.5,
+        opacity: isDone ? 0.5 : 1,
       }}
     >
-      {/* Header */}
-      <div
+      {/* Interactive checkbox */}
+      <button
+        onClick={() => onMarkDone(item.id)}
         style={{
+          width: 18,
+          height: 18,
+          borderRadius: 4,
+          border: isDone ? 'none' : '1.5px solid var(--border)',
+          background: isDone ? 'var(--accent)' : 'transparent',
+          color: '#fff',
+          cursor: 'pointer',
+          flexShrink: 0,
+          marginTop: 2,
           display: 'flex',
           alignItems: 'center',
-          justifyContent: 'space-between',
-          marginBottom: expanded ? 10 : 0,
-          cursor: 'pointer',
+          justifyContent: 'center',
+          fontSize: 11,
+          padding: 0,
+          transition: 'all 0.15s ease',
         }}
-        onClick={() => setExpanded(!expanded)}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        {isDone ? '\u2713' : ''}
+      </button>
+
+      <div style={{ flex: 1, userSelect: 'text' }}>
+        {/* Chat name */}
+        <span
+          style={{
+            fontSize: 11,
+            color: 'var(--accent)',
+            fontWeight: 500,
+            cursor: 'pointer',
+            marginRight: 6,
+          }}
+          onClick={() => onNavigateToChat(item.chatId)}
+        >
+          [{chatName}]
+        </span>
+        {/* Priority badge */}
+        {c && (
           <span
             style={{
-              fontSize: 13,
-              fontWeight: 700,
-              color: catColor,
-              cursor: 'pointer',
+              fontSize: 10,
+              fontWeight: 600,
+              padding: '1px 6px',
+              borderRadius: 4,
+              marginRight: 6,
+              textTransform: 'uppercase',
+              letterSpacing: 0.5,
+              background: c.bg,
+              color: c.fg,
             }}
-            onClick={(e) => { e.stopPropagation(); onNavigateToChat(summary.chatId); }}
           >
-            {chatName}
+            {item.priority}
           </span>
-          {category && (
-            <span
-              style={{
-                fontSize: 10,
-                padding: '1px 8px',
-                borderRadius: 8,
-                background: `${catColor}22`,
-                color: catColor,
-                fontWeight: 600,
-              }}
-            >
-              {category}
-            </span>
-          )}
-          {actionItems.length > 0 && (
-            <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>
-              {actionItems.length} action{actionItems.length !== 1 ? 's' : ''}
-            </span>
-          )}
-        </div>
-        <span style={{ color: 'var(--text-secondary)', fontSize: 14, userSelect: 'none' }}>
-          {expanded ? '\u25B4' : '\u25BE'}
+        )}
+        {/* Assignee */}
+        {item.assignee && (
+          <span style={{ color: '#9b59b6', fontWeight: 500 }}>@{item.assignee} </span>
+        )}
+        {/* Description */}
+        <span
+          style={{
+            color: 'var(--text-primary)',
+            textDecoration: isDone ? 'line-through' : 'none',
+          }}
+        >
+          {item.description}
         </span>
+        {/* Deadline */}
+        {item.deadline && (
+          <span style={{ color: 'var(--text-secondary)', fontSize: 11 }}>
+            {' '}&rarr; by {item.deadline}
+          </span>
+        )}
       </div>
 
-      {expanded && (
-        <>
-          {/* TL;DR */}
-          {summary.tldr && (
-            <div
-              style={{
-                fontSize: 13,
-                lineHeight: 1.6,
-                color: 'var(--text-primary)',
-                marginBottom: actionItems.length > 0 ? 10 : 0,
-                userSelect: 'text',
-              }}
-            >
-              {summary.tldr}
-            </div>
-          )}
-
-          {/* Action items */}
-          {actionItems.length > 0 && (
-            <div style={{ borderTop: '1px solid var(--border)', paddingTop: 10 }}>
-              {actionItems.map((item, i) => {
-                const c = item.priority ? PRIORITY_COLORS[item.priority] || PRIORITY_COLORS.low : null;
-                return (
-                  <div
-                    key={i}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'flex-start',
-                      gap: 8,
-                      marginBottom: 8,
-                      fontSize: 13,
-                      lineHeight: 1.5,
-                    }}
-                  >
-                    <span style={{ color: catColor, flexShrink: 0, marginTop: 2 }}>{'\u25B8'}</span>
-                    <div style={{ userSelect: 'text', flex: 1 }}>
-                      {c && (
-                        <span
-                          style={{
-                            fontSize: 10,
-                            fontWeight: 600,
-                            padding: '1px 6px',
-                            borderRadius: 4,
-                            marginRight: 6,
-                            textTransform: 'uppercase',
-                            letterSpacing: 0.5,
-                            background: c.bg,
-                            color: c.fg,
-                          }}
-                        >
-                          {item.priority}
-                        </span>
-                      )}
-                      {item.assignee && item.assignee !== 'null' && item.assignee !== 'None' && (
-                        <span style={{ color: '#9b59b6', fontWeight: 500 }}>@{item.assignee} </span>
-                      )}
-                      <span style={{ color: 'var(--text-primary)' }}>{item.description}</span>
-                      {item.deadline && item.deadline !== 'null' && item.deadline !== 'None' && (
-                        <span style={{ color: 'var(--text-secondary)', fontSize: 11 }}>
-                          {' '}&rarr; by {item.deadline}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </>
+      {/* Dismiss button */}
+      {!isDone && (
+        <button
+          onClick={() => onDismiss(item.id)}
+          title="Dismiss"
+          style={{
+            background: 'transparent',
+            border: 'none',
+            color: 'var(--text-secondary)',
+            cursor: 'pointer',
+            fontSize: 14,
+            padding: '0 4px',
+            opacity: 0.5,
+            transition: 'opacity 0.15s',
+            flexShrink: 0,
+          }}
+          onMouseEnter={(e) => { (e.target as HTMLElement).style.opacity = '1'; }}
+          onMouseLeave={(e) => { (e.target as HTMLElement).style.opacity = '0.5'; }}
+        >
+          &times;
+        </button>
       )}
     </div>
   );
@@ -207,77 +185,97 @@ export function Dashboard({
   revision = 0,
 }: Props) {
   const api = useApi();
+  const [actionItems, setActionItems] = useState<TrackedActionItem[]>([]);
   const [recentSummaries, setRecentSummaries] = useState<SummaryResult[]>([]);
   const [summarizingChat, setSummarizingChat] = useState<string | null>(null);
-  const [clearedAt, setClearedAt] = useState(0);
   const [lastRefreshed, setLastRefreshed] = useState(Date.now());
   const refreshTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const totalMessages = chats.reduce((sum, c) => sum + c.messageCount, 0);
   const isConnected = connectionState.status === 'connected';
 
-  const chatById = (id: string): Chat | undefined => chats.find((c) => c.id === id);
+  const chatNameById = (id: string): string =>
+    chats.find((c) => c.id === id)?.name || 'Chat';
 
   // ── Data loading ────────────────────────────────────────
-  const loadRecentSummaries = async () => {
+  const loadData = useCallback(async () => {
     try {
       const since24h = Math.floor(Date.now() / 1000) - 86400;
-      const summaries = await api.summarize.recent(since24h, 50);
+      const [items, summaries] = await Promise.all([
+        api.actionItems.list(since24h),
+        api.summarize.recent(since24h, 50),
+      ]);
+      setActionItems(Array.isArray(items) ? items : []);
       setRecentSummaries(Array.isArray(summaries) ? summaries : []);
       setLastRefreshed(Date.now());
     } catch {
       // Silently handle
     }
-  };
+  }, [api]);
 
   const handleManualRefresh = () => {
-    loadRecentSummaries();
+    loadData();
     onRefresh?.();
   };
 
-  useEffect(() => {
-    loadRecentSummaries();
-  }, [revision, chats.length]);
+  useEffect(() => { loadData(); }, [revision, chats.length, loadData]);
 
   useEffect(() => {
-    const unsub = api.summarize.onAutoSummarizeComplete(() =>
-      loadRecentSummaries()
-    );
+    const unsub = api.summarize.onAutoSummarizeComplete(() => loadData());
     return unsub;
-  }, [api]);
+  }, [api, loadData]);
 
-  // Auto-refresh every 30 seconds
   useEffect(() => {
     refreshTimerRef.current = setInterval(() => {
-      loadRecentSummaries();
+      loadData();
       onRefresh?.();
     }, 30_000);
     return () => {
       if (refreshTimerRef.current) clearInterval(refreshTimerRef.current);
     };
-  }, []);
+  }, [loadData]);
+
+  // ── Action item handlers ────────────────────────────────
+  const handleMarkDone = async (id: number) => {
+    // Optimistic update
+    setActionItems((prev) =>
+      prev.map((item) =>
+        item.id === id ? { ...item, status: 'done' as const, resolvedAt: Math.floor(Date.now() / 1000) } : item
+      )
+    );
+    await api.actionItems.markDone(id);
+  };
+
+  const handleDismiss = async (id: number) => {
+    setActionItems((prev) => prev.filter((item) => item.id !== id));
+    await api.actionItems.dismiss(id);
+  };
+
+  const handleDismissAll = async () => {
+    setActionItems([]);
+    await api.actionItems.dismissAll();
+  };
 
   // ── Derived data ────────────────────────────────────────
-
-  const activeSummaries = recentSummaries.filter(
-    (s) => s.createdAt > clearedAt
+  const highPriority = actionItems.filter(
+    (i) => i.priority === 'high' && i.status === 'open' && (i.confidence ?? 3) >= 3
   );
+  const mediumPriority = actionItems.filter(
+    (i) => i.priority === 'medium' && i.status === 'open' && (i.confidence ?? 3) >= 3
+  );
+  const recentlyDone = actionItems.filter((i) => i.status === 'done');
 
-  // Latest summary per chat (no duplicates)
+  // Recent chat summaries (for Quick Summarize context)
   const latestPerChat = new Map<string, SummaryResult>();
-  for (const s of activeSummaries) {
+  for (const s of recentSummaries) {
     const existing = latestPerChat.get(s.chatId);
     if (!existing || s.createdAt > existing.createdAt) {
       latestPerChat.set(s.chatId, s);
     }
   }
-  // Sort by most recent first
-  const dedupedSummaries = [...latestPerChat.values()]
-    .sort((a, b) => b.createdAt - a.createdAt);
 
-  const hasSummaries = dedupedSummaries.length > 0;
+  const hasItems = highPriority.length > 0 || mediumPriority.length > 0 || recentlyDone.length > 0;
 
-  // ── Actions ──────────────────────────────────────────────
   const getGreeting = () => {
     const hour = new Date().getHours();
     if (hour < 12) return 'Good morning';
@@ -290,14 +288,13 @@ export function Dashboard({
     const afterTimestamp = Math.floor(Date.now() / 1000) - hours * 3600;
     try {
       await api.summarize.run(chatId, afterTimestamp);
-      await loadRecentSummaries();
+      await loadData();
     } finally {
       setSummarizingChat(null);
     }
   };
 
-  const timeSinceRefresh = Math.floor((Date.now() - lastRefreshed) / 1000);
-  const refreshLabel = timeSinceRefresh < 10 ? 'just now' : relativeTime(Math.floor(lastRefreshed / 1000));
+  const refreshLabel = relativeTime(Math.floor(lastRefreshed / 1000)) || 'just now';
 
   // ── Render ──────────────────────────────────────────────
   return (
@@ -311,21 +308,13 @@ export function Dashboard({
             justifyContent: 'space-between',
           }}
         >
-          <h1
-            style={{
-              fontSize: 28,
-              fontWeight: 700,
-              color: 'var(--text-primary)',
-            }}
-          >
+          <h1 style={{ fontSize: 28, fontWeight: 700, color: 'var(--text-primary)' }}>
             {getGreeting()}
           </h1>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            {/* Last updated */}
             <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>
               Updated {refreshLabel}
             </span>
-            {/* Refresh button */}
             <button
               onClick={handleManualRefresh}
               title="Refresh now"
@@ -337,16 +326,14 @@ export function Dashboard({
                 fontSize: 14,
                 color: 'var(--text-secondary)',
                 cursor: 'pointer',
-                transition: 'all 0.15s ease',
                 lineHeight: 1,
               }}
             >
               &#x21bb;
             </button>
-            {/* Clear All */}
-            {hasSummaries && (
+            {hasItems && (
               <button
-                onClick={() => setClearedAt(Math.floor(Date.now() / 1000))}
+                onClick={handleDismissAll}
                 style={{
                   background: 'transparent',
                   border: '1px solid var(--border)',
@@ -355,10 +342,9 @@ export function Dashboard({
                   fontSize: 12,
                   color: 'var(--text-secondary)',
                   cursor: 'pointer',
-                  transition: 'all 0.15s ease',
                 }}
               >
-                Clear All
+                Dismiss All
               </button>
             )}
           </div>
@@ -384,26 +370,95 @@ export function Dashboard({
           />
           <span>
             {isConnected ? 'Connected' : 'Disconnected'}
-            {' \u00b7 '}
-            {chats.length} chats
-            {' \u00b7 '}
-            {totalMessages.toLocaleString()} messages synced
+            {' \u00b7 '}{chats.length} chats
+            {' \u00b7 '}{totalMessages.toLocaleString()} messages synced
           </span>
         </div>
       </div>
 
-      {/* ── Per-Chat Summary Cards ─────────────────────────── */}
-      {dedupedSummaries.map((summary) => (
-        <ChatSummaryCard
-          key={summary.chatId}
-          summary={summary}
-          chat={chatById(summary.chatId)}
-          onNavigateToChat={onNavigateToChat}
-        />
-      ))}
+      {/* ── Needs Attention (high priority) ──────────────── */}
+      {highPriority.length > 0 && (
+        <div
+          style={{
+            background: 'var(--bg-secondary)',
+            border: '1px solid rgba(231, 76, 60, 0.4)',
+            borderLeft: '4px solid #e74c3c',
+            borderRadius: 10,
+            padding: '16px 20px',
+            marginBottom: 16,
+          }}
+        >
+          <h3
+            style={{
+              fontSize: 14,
+              fontWeight: 700,
+              color: '#e74c3c',
+              marginBottom: 8,
+              textTransform: 'uppercase',
+              letterSpacing: 0.5,
+            }}
+          >
+            Needs Attention ({highPriority.length})
+          </h3>
+          {highPriority.map((item) => (
+            <ActionItemRow
+              key={item.id}
+              item={item}
+              chatName={chatNameById(item.chatId)}
+              onNavigateToChat={onNavigateToChat}
+              onMarkDone={handleMarkDone}
+              onDismiss={handleDismiss}
+            />
+          ))}
+        </div>
+      )}
+
+      {/* ── This Week (medium + done) ────────────────────── */}
+      {(mediumPriority.length > 0 || recentlyDone.length > 0) && (
+        <div
+          style={{
+            background: 'var(--bg-secondary)',
+            border: '1px solid var(--border)',
+            borderRadius: 10,
+            padding: '16px 20px',
+            marginBottom: 16,
+          }}
+        >
+          <h3
+            style={{
+              fontSize: 14,
+              fontWeight: 700,
+              color: 'var(--text-primary)',
+              marginBottom: 8,
+            }}
+          >
+            This Week ({mediumPriority.length + recentlyDone.length})
+          </h3>
+          {mediumPriority.map((item) => (
+            <ActionItemRow
+              key={item.id}
+              item={item}
+              chatName={chatNameById(item.chatId)}
+              onNavigateToChat={onNavigateToChat}
+              onMarkDone={handleMarkDone}
+              onDismiss={handleDismiss}
+            />
+          ))}
+          {recentlyDone.map((item) => (
+            <ActionItemRow
+              key={item.id}
+              item={item}
+              chatName={chatNameById(item.chatId)}
+              onNavigateToChat={onNavigateToChat}
+              onMarkDone={handleMarkDone}
+              onDismiss={handleDismiss}
+            />
+          ))}
+        </div>
+      )}
 
       {/* ── Quick Summarize ───────────────────────────────── */}
-      <div style={{ marginBottom: 32, marginTop: hasSummaries ? 8 : 0 }}>
+      <div style={{ marginBottom: 32, marginTop: hasItems ? 8 : 0 }}>
         <h3
           style={{
             fontSize: 15,
@@ -412,7 +467,7 @@ export function Dashboard({
             color: 'var(--text-primary)',
           }}
         >
-          Quick Summarize
+          Recent Chats
         </h3>
 
         {chats.length === 0 ? (

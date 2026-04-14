@@ -194,11 +194,17 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
       });
 
       const targetChat = chatRepo.listChats().find((c) => c.id === payload.chatId);
+      const openItems = aiRepo.listOpen(payload.chatId);
       const result = await provider.summarize({
         messages,
         chatName: targetChat?.name ?? 'Unknown',
         isGroup: targetChat?.isGroup ?? payload.chatId.endsWith('@g.us'),
-        previousSummary: latestSummary?.summary,
+        previousContext: latestSummary ? {
+          tldr: latestSummary.tldr,
+          openActionItems: openItems.map((a) => ({ assignee: a.assignee, description: a.description })),
+          recentDecisions: latestSummary.decisionsMade,
+          unresolvedQuestions: latestSummary.unresolvedQuestions,
+        } : undefined,
       });
 
       const timestamps = messages.map((m) => m.timestamp);

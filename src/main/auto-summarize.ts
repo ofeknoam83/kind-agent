@@ -115,11 +115,17 @@ async function runAutoSummarize(
         });
 
         const chatData = allChats.find((c) => c.id === chatId);
+        const openItems = actionItemRepo.listOpen(chatId);
         const result = await provider.summarize({
           messages,
           chatName,
           isGroup: chatData?.isGroup ?? chatId.endsWith('@g.us'),
-          previousSummary: latestSummary?.summary,
+          previousContext: latestSummary ? {
+            tldr: latestSummary.tldr,
+            openActionItems: openItems.map((a) => ({ assignee: a.assignee, description: a.description })),
+            recentDecisions: latestSummary.decisionsMade,
+            unresolvedQuestions: latestSummary.unresolvedQuestions,
+          } : undefined,
         });
 
         const timestamps = messages.map((m) => m.timestamp);
