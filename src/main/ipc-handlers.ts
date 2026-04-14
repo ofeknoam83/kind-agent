@@ -242,19 +242,21 @@ export { closeDb };
 
 type ValidatorKey = keyof typeof channelValidators;
 
-function withValidation<K extends ValidatorKey, R>(
+async function withValidation<K extends ValidatorKey, R>(
   channel: K,
   rawPayload: unknown,
-  handler: (validated: ReturnType<(typeof channelValidators)[K]['parse']>) => R
-): R | { error: string } {
+  handler: (validated: ReturnType<(typeof channelValidators)[K]['parse']>) => R | Promise<R>
+): Promise<R | { error: string }> {
   try {
     const validator = channelValidators[channel];
     const validated = validator.parse(rawPayload);
-    return handler(validated as ReturnType<(typeof channelValidators)[K]['parse']>);
+    return await handler(validated as ReturnType<(typeof channelValidators)[K]['parse']>);
   } catch (err) {
     if (err instanceof ZodError) {
       return { error: `Validation error: ${err.errors.map((e) => e.message).join(', ')}` };
     }
-    return { error: err instanceof Error ? err.message : String(err) };
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error(`Error occurred in handler for '${channel}':`, err);
+    return { error: msg };
   }
 }

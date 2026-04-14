@@ -116,7 +116,17 @@ export class BaileysClient extends EventEmitter<BaileysClientEvents> {
 
     // ── History sync (bulk chat + message data on first connect) ──
     socket.ev.on('messaging-history.set', (event) => {
-      console.log(`[BAILEYS] History sync: ${event.chats.length} chats, ${event.messages.length} messages`);
+      console.log(`[BAILEYS] History sync: ${event.chats.length} chats, ${event.contacts.length} contacts, ${event.messages.length} messages`);
+
+      // Build a contact name lookup from the contacts array
+      const contactNames = new Map<string, string>();
+      for (const contact of event.contacts) {
+        // Prefer saved name > notify (profile) name
+        const cName = contact.name || (contact as any).notify;
+        if (contact.id && cName) {
+          contactNames.set(contact.id, cName);
+        }
+      }
 
       // Emit messages from history
       const normalized = event.messages
@@ -127,10 +137,20 @@ export class BaileysClient extends EventEmitter<BaileysClientEvents> {
         this.emit('messages', normalized);
       }
 
-      // Emit chat metadata with actual names (group name / contact name)
+      // Emit chat metadata with actual names
       for (const chat of event.chats) {
         if (chat.id) {
-          const name = chat.name || chat.id.split('@')[0];
+          // For groups: use chat.name. For 1:1: look up contact name.
+          const isGroup = chat.id.endsWith('@g.us');
+          let name = chat.name;
+          if (!name && !isGroup) {
+            name = contactNames.get(chat.id);
+          }
+          if (!name) {
+            // Last resort: format the phone number or show "Group"
+            name = isGroup ? 'Group' : chat.id.split('@')[0].replace(/^(\d{1,3})(\d+)/, '+$1 $2');
+          }
+
           this.emit('messages', [{
             id: `chat-meta-${chat.id}`,
             chatId: chat.id,
