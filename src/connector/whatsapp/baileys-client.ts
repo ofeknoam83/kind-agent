@@ -1,11 +1,13 @@
-import makeWASocket, {
-  useMultiFileAuthState,
-  DisconnectReason,
-  type WASocket,
-  type BaileysEventMap,
-  type WAMessage,
-} from '@whiskeysockets/baileys';
-import { Boom } from '@hapi/boom';
+import * as baileys from '@whiskeysockets/baileys';
+import type { WASocket, BaileysEventMap, WAMessage } from '@whiskeysockets/baileys';
+
+// Baileys is externalized — handle both ESM default and CJS module.exports
+const makeWASocket = (baileys as any).default ?? baileys.makeWASocket;
+const useMultiFileAuthState = baileys.useMultiFileAuthState;
+const DisconnectReason = baileys.DisconnectReason;
+
+// @hapi/boom is externalized too
+const Boom = (require('@hapi/boom') as any).Boom ?? require('@hapi/boom');
 import path from 'node:path';
 import { app } from 'electron';
 import { EventEmitter } from 'node:events';
