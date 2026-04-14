@@ -3,5 +3,6 @@ export type ConnectionState =
   | { status: 'disconnected' }
   | { status: 'connecting' }
   | { status: 'qr'; qrData: string }
+  | { status: 'pairing-code'; code: string }
   | { status: 'connected'; phoneNumber: string }
   | { status: 'error'; message: string };
