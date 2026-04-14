@@ -6,6 +6,7 @@ import { getDb, closeDb } from '../db/connection';
 import { ChatRepository } from '../db/repositories/chat-repository';
 import { SummaryRepository } from '../db/repositories/summary-repository';
 import { ProviderRepository } from '../db/repositories/provider-repository';
+import { ActionItemRepository } from '../db/repositories/action-item-repository';
 import { createProvider } from '../providers/provider-factory';
 import { BaileysClient } from '../connector/whatsapp/baileys-client';
 import { setApiKey, getAllApiKeys } from './keychain';
@@ -18,6 +19,7 @@ import { setApiKey, getAllApiKeys } from './keychain';
 let chatRepo: ChatRepository | null = null;
 let summaryRepo: SummaryRepository | null = null;
 let providerRepo: ProviderRepository | null = null;
+let actionItemRepo: ActionItemRepository | null = null;
 let baileysClient: BaileysClient | null = null;
 
 function ensureRepos() {
@@ -26,8 +28,9 @@ function ensureRepos() {
     chatRepo = new ChatRepository(db);
     summaryRepo = new SummaryRepository(db);
     providerRepo = new ProviderRepository(db);
+    actionItemRepo = new ActionItemRepository(db);
   }
-  return { chatRepo: chatRepo!, summaryRepo: summaryRepo!, providerRepo: providerRepo! };
+  return { chatRepo: chatRepo!, summaryRepo: summaryRepo!, providerRepo: providerRepo!, actionItemRepo: actionItemRepo! };
 }
 
 function ensureBaileys(mainWindow: BrowserWindow) {
@@ -161,7 +164,7 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
 
   ipcMain.handle(IpcChannels.SUMMARIZE_RUN, async (_event, rawPayload: unknown) => {
     return withValidation('summarize:run', rawPayload, async (payload) => {
-      const { chatRepo, summaryRepo, providerRepo } = ensureRepos();
+      const { chatRepo, summaryRepo, providerRepo, actionItemRepo: aiRepo } = ensureRepos();
 
       const providerConfig = payload.provider
         ? providerRepo.listAll().find((p) => p.type === payload.provider)
@@ -191,11 +194,17 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
       });
 
       const targetChat = chatRepo.listChats().find((c) => c.id === payload.chatId);
+      const openItems = aiRepo.listOpen(payload.chatId);
       const result = await provider.summarize({
         messages,
         chatName: targetChat?.name ?? 'Unknown',
         isGroup: targetChat?.isGroup ?? payload.chatId.endsWith('@g.us'),
-        previousSummary: latestSummary?.summary,
+        previousContext: latestSummary ? {
+          tldr: latestSummary.tldr,
+          openActionItems: openItems.map((a) => ({ assignee: a.assignee, description: a.description })),
+          recentDecisions: latestSummary.decisionsMade,
+          unresolvedQuestions: latestSummary.unresolvedQuestions,
+        } : undefined,
       });
 
       const timestamps = messages.map((m) => m.timestamp);
@@ -207,6 +216,9 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
         messageCount: messages.length,
         timeRange: [Math.min(...timestamps), Math.max(...timestamps)],
       });
+
+      // Track action items with dedup
+      aiRepo.insertFromSummary(id, payload.chatId, result.actionItems);
 
       // Auto-categorize: if chat has no category, use LLM suggestion
       const VALID_CATEGORIES = new Set(['School', 'Kindergarten', 'Work', 'Family', 'Friends', 'Other']);
@@ -289,6 +301,41 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
       setApiKey(payload.provider, payload.apiKey);
       return { success: true };
     });
+  });
+
+  // ── Action Items ────────────────────────────────────────
+
+  ipcMain.handle(IpcChannels.ACTION_ITEMS_LIST, (_event, rawPayload: unknown) => {
+    return withValidation('action-items:list', rawPayload, (payload) => {
+      const { actionItemRepo } = ensureRepos();
+      if (payload.sinceTimestamp) {
+        return actionItemRepo.listRecent(payload.sinceTimestamp, payload.limit);
+      }
+      return actionItemRepo.listOpen(payload.chatId);
+    });
+  });
+
+  ipcMain.handle(IpcChannels.ACTION_ITEMS_MARK_DONE, (_event, rawPayload: unknown) => {
+    return withValidation('action-items:mark-done', rawPayload, (payload) => {
+      ensureRepos().actionItemRepo.markDone(payload.id);
+      return { success: true };
+    });
+  });
+
+  ipcMain.handle(IpcChannels.ACTION_ITEMS_DISMISS, (_event, rawPayload: unknown) => {
+    return withValidation('action-items:dismiss', rawPayload, (payload) => {
+      ensureRepos().actionItemRepo.dismiss(payload.id);
+      return { success: true };
+    });
+  });
+
+  ipcMain.handle(IpcChannels.ACTION_ITEMS_DISMISS_ALL, () => {
+    try {
+      ensureRepos().actionItemRepo.dismissAll();
+      return { success: true };
+    } catch (err) {
+      return { error: String(err) };
+    }
   });
 }
 

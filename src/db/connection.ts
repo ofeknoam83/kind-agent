@@ -81,6 +81,26 @@ function runMigrations(database: Database.Database): void {
       active     INTEGER NOT NULL DEFAULT 0
     );
 
+    CREATE TABLE IF NOT EXISTS action_items (
+      id            INTEGER PRIMARY KEY AUTOINCREMENT,
+      summary_id    INTEGER REFERENCES summaries(id) ON DELETE SET NULL,
+      chat_id       TEXT NOT NULL REFERENCES chats(id) ON DELETE CASCADE,
+      description   TEXT NOT NULL,
+      assignee      TEXT,
+      deadline      TEXT,
+      priority      TEXT,
+      confidence    INTEGER NOT NULL DEFAULT 3,
+      status        TEXT NOT NULL DEFAULT 'open',
+      fingerprint   TEXT NOT NULL,
+      created_at    INTEGER NOT NULL DEFAULT (unixepoch()),
+      resolved_at   INTEGER
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_action_items_chat ON action_items(chat_id, status);
+    CREATE INDEX IF NOT EXISTS idx_action_items_status ON action_items(status, priority, created_at DESC);
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_action_items_dedup
+      ON action_items(chat_id, fingerprint) WHERE status = 'open';
+
     INSERT OR IGNORE INTO provider_configs (type, label, base_url, model, active) VALUES
       ('openai',   'OpenAI',    'https://api.openai.com/v1',    'gpt-4o',        0),
       ('lmstudio', 'LM Studio', 'http://localhost:1234/v1',     'default',       0),

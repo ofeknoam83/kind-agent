@@ -50,6 +50,16 @@ export const SummaryRecentRequest = z.object({
   limit: z.number().int().min(1).max(200).default(50),
 });
 
+export const ActionItemsListRequest = z.object({
+  sinceTimestamp: z.number().int().optional(),
+  chatId: z.string().optional(),
+  limit: z.number().int().min(1).max(200).default(50),
+});
+
+export const ActionItemIdRequest = z.object({
+  id: z.number().int().positive(),
+});
+
 // ── Validator map keyed by channel ────────────────────────────────────
 // Used in main process to validate incoming IPC payloads.
 
@@ -63,4 +73,7 @@ export const channelValidators = {
   'providers:update': ProviderUpdateRequest,
   'providers:set-api-key': SetApiKeyRequest,
   'settings:set': SettingsSetRequest,
+  'action-items:list': ActionItemsListRequest,
+  'action-items:mark-done': ActionItemIdRequest,
+  'action-items:dismiss': ActionItemIdRequest,
 } as const;

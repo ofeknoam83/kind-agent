@@ -342,13 +342,13 @@ export class BaileysClient extends EventEmitter<BaileysClientEvents> {
       m.listResponseMessage?.title ||
       m.buttonsResponseMessage?.selectedDisplayText ||
       // Media placeholders — stored so message counts are accurate
-      (m.imageMessage ? '[Image]' : null) ||
-      (m.videoMessage ? '[Video]' : null) ||
+      (m.imageMessage ? '[Image shared - no caption]' : null) ||
+      (m.videoMessage ? '[Video shared - no caption]' : null) ||
       (m.audioMessage ? '[Voice note]' : null) ||
       (m.stickerMessage ? '[Sticker]' : null) ||
-      (m.documentMessage ? '[Document]' : null) ||
-      (m.contactMessage ? '[Contact]' : null) ||
-      (m.locationMessage ? '[Location]' : null) ||
+      (m.documentMessage ? '[Document shared]' : null) ||
+      (m.contactMessage ? '[Contact shared]' : null) ||
+      (m.locationMessage ? '[Location shared]' : null) ||
       (m.reactionMessage ? null : null) || // Skip reactions — they're not real messages
       (m.protocolMessage ? null : null) || // Skip protocol messages
       null;

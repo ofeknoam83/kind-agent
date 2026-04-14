@@ -3,6 +3,7 @@ import { IpcEvents } from '../shared/ipc';
 import { ChatRepository } from '../db/repositories/chat-repository';
 import { SummaryRepository } from '../db/repositories/summary-repository';
 import { ProviderRepository } from '../db/repositories/provider-repository';
+import { ActionItemRepository } from '../db/repositories/action-item-repository';
 import { createProvider } from '../providers/provider-factory';
 import { getAllApiKeys } from './keychain';
 
@@ -24,6 +25,7 @@ export function startAutoSummarize(
     chatRepo: ChatRepository;
     summaryRepo: SummaryRepository;
     providerRepo: ProviderRepository;
+    actionItemRepo: ActionItemRepository;
   }
 ): void {
   if (intervalId) return; // Already running
@@ -57,6 +59,7 @@ async function runAutoSummarize(
     chatRepo: ChatRepository;
     summaryRepo: SummaryRepository;
     providerRepo: ProviderRepository;
+    actionItemRepo: ActionItemRepository;
   }
 ): Promise<void> {
   if (running) {
@@ -66,7 +69,7 @@ async function runAutoSummarize(
 
   running = true;
   try {
-    const { chatRepo, summaryRepo, providerRepo } = getRepos();
+    const { chatRepo, summaryRepo, providerRepo, actionItemRepo } = getRepos();
 
     // Find the active provider
     const providerConfig = providerRepo.getActive();
@@ -112,15 +115,21 @@ async function runAutoSummarize(
         });
 
         const chatData = allChats.find((c) => c.id === chatId);
+        const openItems = actionItemRepo.listOpen(chatId);
         const result = await provider.summarize({
           messages,
           chatName,
           isGroup: chatData?.isGroup ?? chatId.endsWith('@g.us'),
-          previousSummary: latestSummary?.summary,
+          previousContext: latestSummary ? {
+            tldr: latestSummary.tldr,
+            openActionItems: openItems.map((a) => ({ assignee: a.assignee, description: a.description })),
+            recentDecisions: latestSummary.decisionsMade,
+            unresolvedQuestions: latestSummary.unresolvedQuestions,
+          } : undefined,
         });
 
         const timestamps = messages.map((m) => m.timestamp);
-        summaryRepo.insert({
+        const summaryId = summaryRepo.insert({
           chatId,
           ...result,
           provider: providerConfig.type,
@@ -128,6 +137,9 @@ async function runAutoSummarize(
           messageCount: messages.length,
           timeRange: [Math.min(...timestamps), Math.max(...timestamps)],
         });
+
+        // Track action items with dedup
+        actionItemRepo.insertFromSummary(summaryId, chatId, result.actionItems);
 
         // Auto-categorize: if chat has no category, use LLM suggestion
         const VALID_CATEGORIES = new Set(['School', 'Kindergarten', 'Work', 'Family', 'Friends', 'Other']);

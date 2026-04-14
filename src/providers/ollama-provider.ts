@@ -1,5 +1,5 @@
 import type { SummarizationProvider, SummarizeInput, SummarizeOutput } from './base';
-import { SYSTEM_PROMPT, formatTranscript, parseProviderResponse } from './base';
+import { SYSTEM_PROMPT, formatTranscript, formatPreviousContext, parseProviderResponse } from './base';
 
 interface OllamaProviderConfig {
   baseUrl: string;
@@ -34,8 +34,13 @@ export class OllamaProvider implements SummarizationProvider {
   async summarize(input: SummarizeInput): Promise<SummarizeOutput> {
     const transcript = formatTranscript(input.messages, input.chatName, input.isGroup);
 
-    const userMessage = input.previousSummary
-      ? `Previous summary for context:\n${input.previousSummary}\n\n---\n\nNew messages to summarize:\n${transcript}`
+    const contextBlock = input.previousContext
+      ? formatPreviousContext(input.previousContext)
+      : input.previousSummary
+        ? `Previous summary for context:\n${input.previousSummary}\n\n`
+        : '';
+    const userMessage = contextBlock
+      ? `${contextBlock}---\n\nNew messages to summarize:\n${transcript}`
       : transcript;
 
     const res = await fetch(`${this.config.baseUrl}/api/chat`, {
