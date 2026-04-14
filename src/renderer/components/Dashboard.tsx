@@ -17,7 +17,29 @@ const TIME_RANGES = [
   { label: '7d', hours: 168 },
 ] as const;
 
-const CATEGORY_COLORS: Record<string, string> = {
+// ── Category config ───────────────────────────────────────
+interface CategoryConfig {
+  label: string;
+  color: string;
+  icon: string;
+  keys: string[]; // which ChatCategory values map here
+}
+
+const CATEGORIES: CategoryConfig[] = [
+  { label: 'Work', color: '#25d366', icon: '\u{1F4BC}', keys: ['Work'] },
+  { label: 'School & Kids', color: '#3498db', icon: '\u{1F3EB}', keys: ['School', 'Kindergarten'] },
+  { label: 'Family', color: '#9b59b6', icon: '\u{1F3E0}', keys: ['Family'] },
+  { label: 'Friends', color: '#f39c12', icon: '\u{1F91D}', keys: ['Friends'] },
+  { label: 'Other', color: '#666', icon: '\u{1F4AC}', keys: ['Other'] },
+];
+
+const PRIORITY_COLORS: Record<string, { bg: string; fg: string }> = {
+  high: { bg: 'rgba(231, 76, 60, 0.15)', fg: '#e74c3c' },
+  medium: { bg: 'rgba(243, 156, 18, 0.15)', fg: '#f39c12' },
+  low: { bg: 'rgba(52, 152, 219, 0.15)', fg: '#3498db' },
+};
+
+const QUICK_SUMMARIZE_CATEGORY_COLORS: Record<string, string> = {
   School: '#3498db',
   Kindergarten: '#e91e63',
   Work: '#25d366',
@@ -26,216 +48,257 @@ const CATEGORY_COLORS: Record<string, string> = {
   Other: '#666',
 };
 
-const PRIORITY_COLORS: Record<string, { bg: string; fg: string }> = {
-  high: { bg: 'rgba(231, 76, 60, 0.15)', fg: '#e74c3c' },
-  medium: { bg: 'rgba(243, 156, 18, 0.15)', fg: '#f39c12' },
-  low: { bg: 'rgba(52, 152, 219, 0.15)', fg: '#3498db' },
-};
+// ── Helpers ───────────────────────────────────────────────
+type ActionWithContext = { item: ActionItem; chatId: string; chatName: string };
 
-// ── Types ─────────────────────────────────────────────────
-type ActionWithContext = { item: ActionItem; chatId: string; tldr: string };
-
-// ── Deduplication ─────────────────────────────────────────
-function dedup(items: ActionWithContext[]): ActionWithContext[] {
-  const seen = new Set<string>();
-  return items.filter((a) => {
-    const normalized = a.item.description
-      .toLowerCase()
-      .trim()
-      .replace(/\s+/g, ' ')
-      .slice(0, 80);
-    const key = `${a.chatId}::${normalized}`;
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
+function relativeTime(ts: number): string {
+  if (!ts) return '';
+  const diff = Math.floor(Date.now() / 1000) - ts;
+  if (diff < 60) return 'just now';
+  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+  if (diff < 604800) return `${Math.floor(diff / 86400)}d ago`;
+  return new Date(ts * 1000).toLocaleDateString();
 }
 
-// ── Expandable Action Item Card ───────────────────────────
-function ActionItemCard({
-  item,
-  chatId,
-  chatNameStr,
-  tldr,
+// ── Category Card ─────────────────────────────────────────
+function CategoryCard({
+  config,
+  summaries,
+  chatNameById,
   onNavigateToChat,
 }: {
-  item: ActionItem;
-  chatId: string;
-  chatNameStr: string;
-  tldr: string;
+  config: CategoryConfig;
+  summaries: SummaryResult[];
+  chatNameById: (id: string) => string;
   onNavigateToChat: (id: string) => void;
 }) {
   const [expanded, setExpanded] = useState(true);
-  const c = item.priority ? PRIORITY_COLORS[item.priority] || PRIORITY_COLORS.low : null;
+
+  // Build narrative from TL;DRs
+  const narrativeParts = summaries
+    .filter((s) => s.tldr)
+    .map((s) => ({ chatName: chatNameById(s.chatId), tldr: s.tldr, chatId: s.chatId }));
+
+  // Collect top action items (high first, then medium, max 3)
+  const allActions: ActionWithContext[] = summaries.flatMap((s) =>
+    s.actionItems
+      .filter((item) => item.priority === 'high' || item.priority === 'medium')
+      .map((item) => ({ item, chatId: s.chatId, chatName: chatNameById(s.chatId) }))
+  );
+  allActions.sort((a, b) => {
+    const prio = { high: 0, medium: 1 };
+    return (prio[a.item.priority as 'high' | 'medium'] ?? 2) - (prio[b.item.priority as 'high' | 'medium'] ?? 2);
+  });
+  const topActions = allActions.slice(0, 3);
+
+  // Source chats
+  const sourceChats = [...new Set(summaries.map((s) => s.chatId))];
+
+  if (narrativeParts.length === 0 && topActions.length === 0) return null;
 
   return (
     <div
       style={{
-        background: 'rgba(255,255,255,0.02)',
-        border: '1px solid var(--border)',
-        borderRadius: 8,
-        padding: '10px 14px',
-        marginBottom: 8,
+        background: 'var(--bg-secondary)',
+        border: `1px solid ${config.color}33`,
+        borderLeft: `4px solid ${config.color}`,
+        borderRadius: 10,
+        padding: '16px 20px',
+        marginBottom: 16,
       }}
     >
-      {/* Header row */}
+      {/* Header */}
       <div
         style={{
           display: 'flex',
           alignItems: 'center',
-          gap: 8,
-          marginBottom: 6,
-          fontSize: 12,
-          flexWrap: 'wrap',
+          justifyContent: 'space-between',
+          marginBottom: expanded ? 12 : 0,
+          cursor: 'pointer',
         }}
+        onClick={() => setExpanded(!expanded)}
       >
-        <span
-          style={{ color: 'var(--accent)', fontWeight: 600, cursor: 'pointer' }}
-          onClick={() => onNavigateToChat(chatId)}
+        <h3
+          style={{
+            fontSize: 14,
+            fontWeight: 700,
+            color: config.color,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+          }}
         >
-          [{chatNameStr}]
-        </span>
-        {item.assignee && item.assignee !== 'null' && item.assignee !== 'None' && (
-          <span style={{ color: '#9b59b6', fontWeight: 500 }}>@{item.assignee}</span>
-        )}
-        {c && (
-          <span
-            style={{
-              fontSize: 10,
-              fontWeight: 600,
-              padding: '1px 6px',
-              borderRadius: 4,
-              textTransform: 'uppercase',
-              letterSpacing: 0.5,
-              background: c.bg,
-              color: c.fg,
-            }}
-          >
-            {item.priority}
-          </span>
-        )}
-        {item.deadline && item.deadline !== 'null' && item.deadline !== 'None' && (
-          <span style={{ color: 'var(--text-secondary)', fontSize: 11 }}>
-            by {item.deadline}
-          </span>
-        )}
+          <span style={{ fontSize: 16 }}>{config.icon}</span>
+          {config.label}
+          {topActions.length > 0 && (
+            <span
+              style={{
+                fontSize: 11,
+                fontWeight: 500,
+                color: 'var(--text-secondary)',
+              }}
+            >
+              {topActions.length} action{topActions.length !== 1 ? 's' : ''}
+            </span>
+          )}
+        </h3>
         <span
           style={{
-            marginLeft: 'auto',
-            cursor: 'pointer',
             color: 'var(--text-secondary)',
             fontSize: 14,
             userSelect: 'none',
-            lineHeight: 1,
           }}
-          onClick={() => setExpanded(!expanded)}
-          title={expanded ? 'Collapse' : 'Expand'}
         >
           {expanded ? '\u25B4' : '\u25BE'}
         </span>
       </div>
 
-      {/* Description — always visible */}
-      <div
-        style={{
-          fontSize: 13,
-          lineHeight: 1.6,
-          color: 'var(--text-primary)',
-          userSelect: 'text',
-        }}
-      >
-        {item.description}
-      </div>
+      {expanded && (
+        <>
+          {/* Narrative: what's happening */}
+          {narrativeParts.length > 0 && (
+            <div style={{ marginBottom: topActions.length > 0 ? 12 : 0 }}>
+              {narrativeParts.map((part, i) => (
+                <div
+                  key={i}
+                  style={{
+                    fontSize: 13,
+                    lineHeight: 1.6,
+                    color: 'var(--text-primary)',
+                    marginBottom: i < narrativeParts.length - 1 ? 8 : 0,
+                    userSelect: 'text',
+                  }}
+                >
+                  <span
+                    style={{
+                      color: config.color,
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      fontSize: 12,
+                    }}
+                    onClick={() => onNavigateToChat(part.chatId)}
+                  >
+                    {part.chatName}:
+                  </span>{' '}
+                  {part.tldr}
+                </div>
+              ))}
+            </div>
+          )}
 
-      {/* Context block — expanded by default */}
-      {expanded && tldr && (
-        <div
-          style={{
-            marginTop: 8,
-            fontSize: 12,
-            lineHeight: 1.5,
-            color: 'var(--text-secondary)',
-            background: 'rgba(255,255,255,0.03)',
-            padding: '8px 12px',
-            borderRadius: 6,
-            borderLeft: '2px solid var(--border)',
-            userSelect: 'text',
-          }}
-        >
-          {tldr}
-        </div>
+          {/* Top action items */}
+          {topActions.length > 0 && (
+            <div
+              style={{
+                borderTop: '1px solid var(--border)',
+                paddingTop: 10,
+                marginTop: 4,
+              }}
+            >
+              {topActions.map((a, i) => {
+                const c = a.item.priority
+                  ? PRIORITY_COLORS[a.item.priority] || PRIORITY_COLORS.low
+                  : null;
+                return (
+                  <div
+                    key={i}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'flex-start',
+                      gap: 8,
+                      marginBottom: 8,
+                      fontSize: 13,
+                      lineHeight: 1.5,
+                    }}
+                  >
+                    <span style={{ color: config.color, flexShrink: 0, marginTop: 2 }}>
+                      {'\u25B8'}
+                    </span>
+                    <div style={{ userSelect: 'text', flex: 1 }}>
+                      {c && (
+                        <span
+                          style={{
+                            fontSize: 10,
+                            fontWeight: 600,
+                            padding: '1px 6px',
+                            borderRadius: 4,
+                            marginRight: 6,
+                            textTransform: 'uppercase',
+                            letterSpacing: 0.5,
+                            background: c.bg,
+                            color: c.fg,
+                          }}
+                        >
+                          {a.item.priority}
+                        </span>
+                      )}
+                      {a.item.assignee &&
+                        a.item.assignee !== 'null' &&
+                        a.item.assignee !== 'None' && (
+                          <span style={{ color: '#9b59b6', fontWeight: 500 }}>
+                            @{a.item.assignee}{' '}
+                          </span>
+                        )}
+                      <span style={{ color: 'var(--text-primary)' }}>
+                        {a.item.description}
+                      </span>
+                      {a.item.deadline &&
+                        a.item.deadline !== 'null' &&
+                        a.item.deadline !== 'None' && (
+                          <span
+                            style={{
+                              color: 'var(--text-secondary)',
+                              fontSize: 11,
+                            }}
+                          >
+                            {' '}
+                            &rarr; by {a.item.deadline}
+                          </span>
+                        )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Source chats */}
+          {sourceChats.length > 1 && (
+            <div
+              style={{
+                fontSize: 11,
+                color: 'var(--text-secondary)',
+                marginTop: 8,
+              }}
+            >
+              from:{' '}
+              {sourceChats.map((id, i) => (
+                <span key={id}>
+                  {i > 0 && ', '}
+                  <span
+                    style={{ cursor: 'pointer', color: config.color }}
+                    onClick={() => onNavigateToChat(id)}
+                  >
+                    {chatNameById(id)}
+                  </span>
+                </span>
+              ))}
+            </div>
+          )}
+        </>
       )}
     </div>
   );
 }
 
-// ── Section Header with Clear All ─────────────────────────
-function SectionHeader({
-  title,
-  color,
-  count,
-  onClear,
-}: {
-  title: string;
-  color: string;
-  count: number;
-  onClear: () => void;
-}) {
-  return (
-    <div
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        marginBottom: 12,
-      }}
-    >
-      <h3
-        style={{
-          fontSize: 14,
-          fontWeight: 700,
-          color,
-          textTransform: 'uppercase',
-          letterSpacing: 0.5,
-          display: 'flex',
-          alignItems: 'center',
-          gap: 8,
-        }}
-      >
-        {title}
-        <span
-          style={{
-            fontSize: 11,
-            fontWeight: 500,
-            color: 'var(--text-secondary)',
-            textTransform: 'none',
-            letterSpacing: 0,
-          }}
-        >
-          ({count})
-        </span>
-      </h3>
-      <button
-        onClick={onClear}
-        style={{
-          background: 'transparent',
-          border: '1px solid var(--border)',
-          borderRadius: 6,
-          padding: '3px 10px',
-          fontSize: 11,
-          color: 'var(--text-secondary)',
-          cursor: 'pointer',
-          transition: 'all 0.15s ease',
-        }}
-      >
-        Clear All
-      </button>
-    </div>
-  );
-}
-
 // ── Main Dashboard ────────────────────────────────────────
-export function Dashboard({ chats, connectionState, onNavigateToChat, revision = 0 }: Props) {
+export function Dashboard({
+  chats,
+  connectionState,
+  onNavigateToChat,
+  revision = 0,
+}: Props) {
   const api = useApi();
   const [recentSummaries, setRecentSummaries] = useState<SummaryResult[]>([]);
   const [summarizingChat, setSummarizingChat] = useState<string | null>(null);
@@ -245,8 +308,10 @@ export function Dashboard({ chats, connectionState, onNavigateToChat, revision =
   const totalMessages = chats.reduce((sum, c) => sum + c.messageCount, 0);
   const isConnected = connectionState.status === 'connected';
 
-  const chatNameById = (id: string): string => chats.find((c) => c.id === id)?.name || 'Chat';
-  const chatById = (id: string): Chat | undefined => chats.find((c) => c.id === id);
+  const chatNameById = (id: string): string =>
+    chats.find((c) => c.id === id)?.name || 'Chat';
+  const chatById = (id: string): Chat | undefined =>
+    chats.find((c) => c.id === id);
 
   // ── Data loading ────────────────────────────────────────
   const loadRecentSummaries = async () => {
@@ -264,7 +329,9 @@ export function Dashboard({ chats, connectionState, onNavigateToChat, revision =
   }, [revision, chats.length]);
 
   useEffect(() => {
-    const unsub = api.summarize.onAutoSummarizeComplete(() => loadRecentSummaries());
+    const unsub = api.summarize.onAutoSummarizeComplete(() =>
+      loadRecentSummaries()
+    );
     return unsub;
   }, [api]);
 
@@ -275,35 +342,59 @@ export function Dashboard({ chats, connectionState, onNavigateToChat, revision =
     };
   }, []);
 
-  // ── Derived data (filtered + deduplicated) ──────────────
-  const activeSummaries = recentSummaries.filter((s) => s.createdAt > clearedAt);
+  // ── Derived data ────────────────────────────────────────
 
-  // Only high & medium confidence items
-  const allItems: ActionWithContext[] = activeSummaries.flatMap((s) =>
-    s.actionItems
-      .filter((item) => item.priority === 'high' || item.priority === 'medium')
-      .map((item) => ({ item, chatId: s.chatId, tldr: s.tldr || s.summary }))
+  // Filter by cleared timestamp
+  const activeSummaries = recentSummaries.filter(
+    (s) => s.createdAt > clearedAt
   );
 
-  const criticalAlerts = dedup(allItems.filter((a) => a.item.priority === 'high'));
-  const actionItems = dedup(allItems.filter((a) => a.item.priority === 'medium'));
+  // Latest summary per chat (eliminates duplicates from multiple runs)
+  const latestPerChat = new Map<string, SummaryResult>();
+  for (const s of activeSummaries) {
+    const existing = latestPerChat.get(s.chatId);
+    if (!existing || s.createdAt > existing.createdAt) {
+      latestPerChat.set(s.chatId, s);
+    }
+  }
+  const dedupedSummaries = [...latestPerChat.values()];
 
-  const schoolKindergartenSummaries = activeSummaries.filter((s) => {
+  // Group summaries by category
+  const summariesByCategory = new Map<string, SummaryResult[]>();
+  for (const s of dedupedSummaries) {
     const chat = chatById(s.chatId);
-    return chat?.category === 'School' || chat?.category === 'Kindergarten';
-  });
+    const cat = chat?.category || 'Uncategorized';
+    const existing = summariesByCategory.get(cat) ?? [];
+    existing.push(s);
+    summariesByCategory.set(cat, existing);
+  }
 
-  // ── Helpers ──────────────────────────────────────────────
-  const relativeTime = (ts: number): string => {
-    if (!ts) return '';
-    const diff = Math.floor(Date.now() / 1000) - ts;
-    if (diff < 60) return 'just now';
-    if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
-    if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
-    if (diff < 604800) return `${Math.floor(diff / 86400)}d ago`;
-    return new Date(ts * 1000).toLocaleDateString();
-  };
+  // Build category card data — merge category keys
+  const categoryCards = CATEGORIES.map((config) => {
+    const summaries: SummaryResult[] = [];
+    for (const key of config.keys) {
+      summaries.push(...(summariesByCategory.get(key) ?? []));
+    }
+    return { config, summaries };
+  }).filter((c) => c.summaries.length > 0);
 
+  // Uncategorized goes at the end
+  const uncategorizedSummaries = summariesByCategory.get('Uncategorized') ?? [];
+  if (uncategorizedSummaries.length > 0) {
+    categoryCards.push({
+      config: {
+        label: 'Uncategorized',
+        color: '#888',
+        icon: '\u{1F4AC}',
+        keys: ['Uncategorized'],
+      },
+      summaries: uncategorizedSummaries,
+    });
+  }
+
+  const hasSummaries = categoryCards.length > 0;
+
+  // ── Actions ──────────────────────────────────────────────
   const getGreeting = () => {
     const hour = new Date().getHours();
     if (hour < 12) return 'Good morning';
@@ -322,23 +413,45 @@ export function Dashboard({ chats, connectionState, onNavigateToChat, revision =
     }
   };
 
-  const handleClearAll = () => setClearedAt(Math.floor(Date.now() / 1000));
-
   // ── Render ──────────────────────────────────────────────
   return (
     <div style={{ flex: 1, overflowY: 'auto', padding: 32 }}>
-      {/* Greeting */}
+      {/* Greeting + Clear All */}
       <div style={{ marginBottom: 24 }}>
-        <h1
+        <div
           style={{
-            fontSize: 28,
-            fontWeight: 700,
-            marginBottom: 8,
-            color: 'var(--text-primary)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
           }}
         >
-          {getGreeting()}
-        </h1>
+          <h1
+            style={{
+              fontSize: 28,
+              fontWeight: 700,
+              color: 'var(--text-primary)',
+            }}
+          >
+            {getGreeting()}
+          </h1>
+          {hasSummaries && (
+            <button
+              onClick={() => setClearedAt(Math.floor(Date.now() / 1000))}
+              style={{
+                background: 'transparent',
+                border: '1px solid var(--border)',
+                borderRadius: 6,
+                padding: '4px 12px',
+                fontSize: 12,
+                color: 'var(--text-secondary)',
+                cursor: 'pointer',
+                transition: 'all 0.15s ease',
+              }}
+            >
+              Clear All
+            </button>
+          )}
+        </div>
         <div
           style={{
             fontSize: 14,
@@ -346,6 +459,7 @@ export function Dashboard({ chats, connectionState, onNavigateToChat, revision =
             display: 'flex',
             alignItems: 'center',
             gap: 8,
+            marginTop: 8,
           }}
         >
           <span
@@ -367,169 +481,19 @@ export function Dashboard({ chats, connectionState, onNavigateToChat, revision =
         </div>
       </div>
 
-      {/* ── Critical Alerts (high priority only) ─────────── */}
-      {criticalAlerts.length > 0 && (
-        <div
-          style={{
-            background: 'var(--bg-secondary)',
-            border: '1px solid rgba(231, 76, 60, 0.4)',
-            borderLeft: '4px solid #e74c3c',
-            borderRadius: 10,
-            padding: '16px 20px',
-            marginBottom: 20,
-          }}
-        >
-          <SectionHeader
-            title="Critical Alerts"
-            color="#e74c3c"
-            count={criticalAlerts.length}
-            onClear={handleClearAll}
-          />
-          {criticalAlerts.map((a, i) => (
-            <ActionItemCard
-              key={`critical-${i}`}
-              item={a.item}
-              chatId={a.chatId}
-              chatNameStr={chatNameById(a.chatId)}
-              tldr={a.tldr}
-              onNavigateToChat={onNavigateToChat}
-            />
-          ))}
-        </div>
-      )}
-
-      {/* ── Action Items (medium priority) ────────────────── */}
-      {actionItems.length > 0 && (
-        <div
-          style={{
-            background: 'var(--bg-secondary)',
-            border: '1px solid var(--border)',
-            borderRadius: 10,
-            padding: '16px 20px',
-            marginBottom: 20,
-          }}
-        >
-          <SectionHeader
-            title="Action Items"
-            color="var(--text-primary)"
-            count={actionItems.length}
-            onClear={handleClearAll}
-          />
-          {actionItems.map((a, i) => (
-            <ActionItemCard
-              key={`action-${i}`}
-              item={a.item}
-              chatId={a.chatId}
-              chatNameStr={chatNameById(a.chatId)}
-              tldr={a.tldr}
-              onNavigateToChat={onNavigateToChat}
-            />
-          ))}
-        </div>
-      )}
-
-      {/* ── School & Kindergarten ─────────────────────────── */}
-      {schoolKindergartenSummaries.length > 0 && (
-        <div
-          style={{
-            background: 'var(--bg-secondary)',
-            border: '1px solid rgba(37, 211, 102, 0.3)',
-            borderLeft: '4px solid #25d366',
-            borderRadius: 10,
-            padding: '16px 20px',
-            marginBottom: 20,
-          }}
-        >
-          <h3
-            style={{
-              fontSize: 14,
-              fontWeight: 700,
-              color: '#25d366',
-              marginBottom: 12,
-            }}
-          >
-            School & Kindergarten
-          </h3>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-            {schoolKindergartenSummaries.map((s, i) => {
-              const chat = chatById(s.chatId);
-              const catColor = chat?.category
-                ? CATEGORY_COLORS[chat.category] || '#666'
-                : '#666';
-              return (
-                <div key={i}>
-                  <div
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 8,
-                      marginBottom: 6,
-                    }}
-                  >
-                    <span
-                      style={{
-                        fontSize: 12,
-                        fontWeight: 600,
-                        color: 'var(--accent)',
-                        cursor: 'pointer',
-                      }}
-                      onClick={() => onNavigateToChat(s.chatId)}
-                    >
-                      {chatNameById(s.chatId)}
-                    </span>
-                    {chat?.category && (
-                      <span
-                        style={{
-                          fontSize: 10,
-                          padding: '1px 8px',
-                          borderRadius: 8,
-                          background: `${catColor}22`,
-                          color: catColor,
-                          fontWeight: 600,
-                        }}
-                      >
-                        {chat.category}
-                      </span>
-                    )}
-                  </div>
-                  {s.tldr && (
-                    <div
-                      style={{
-                        fontSize: 13,
-                        lineHeight: 1.6,
-                        color: 'var(--text-primary)',
-                        marginBottom: 8,
-                        userSelect: 'text',
-                      }}
-                    >
-                      {s.tldr}
-                    </div>
-                  )}
-                  {s.actionItems.length > 0 && (
-                    <div style={{ marginTop: 4 }}>
-                      {s.actionItems
-                        .filter((item) => item.priority === 'high' || item.priority === 'medium')
-                        .map((item, j) => (
-                          <ActionItemCard
-                            key={j}
-                            item={item}
-                            chatId={s.chatId}
-                            chatNameStr={chatNameById(s.chatId)}
-                            tldr=""
-                            onNavigateToChat={onNavigateToChat}
-                          />
-                        ))}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
+      {/* ── Category Cards ────────────────────────────────── */}
+      {categoryCards.map(({ config, summaries }) => (
+        <CategoryCard
+          key={config.label}
+          config={config}
+          summaries={summaries}
+          chatNameById={chatNameById}
+          onNavigateToChat={onNavigateToChat}
+        />
+      ))}
 
       {/* ── Quick Summarize ───────────────────────────────── */}
-      <div style={{ marginBottom: 32 }}>
+      <div style={{ marginBottom: 32, marginTop: hasSummaries ? 8 : 0 }}>
         <h3
           style={{
             fontSize: 15,
@@ -603,8 +567,10 @@ export function Dashboard({ chats, connectionState, onNavigateToChat, revision =
                             fontSize: 10,
                             padding: '1px 8px',
                             borderRadius: 8,
-                            background: `${CATEGORY_COLORS[chat.category] || '#666'}22`,
-                            color: CATEGORY_COLORS[chat.category] || '#666',
+                            background: `${QUICK_SUMMARIZE_CATEGORY_COLORS[chat.category] || '#666'}22`,
+                            color:
+                              QUICK_SUMMARIZE_CATEGORY_COLORS[chat.category] ||
+                              '#666',
                             fontWeight: 600,
                           }}
                         >
@@ -647,7 +613,9 @@ export function Dashboard({ chats, connectionState, onNavigateToChat, revision =
                           fontSize: 11,
                           fontWeight: 500,
                           cursor:
-                            summarizingChat === chat.id ? 'not-allowed' : 'pointer',
+                            summarizingChat === chat.id
+                              ? 'not-allowed'
+                              : 'pointer',
                           transition: 'all 0.15s ease',
                         }}
                       >

@@ -35,6 +35,7 @@ export interface SummarizeOutput {
   risks: string[];
   usefulContext: string[];
   tone: string;
+  suggestedCategory: string;
 }
 
 /**
@@ -75,7 +76,8 @@ Produce a JSON response with exactly this structure:
   "usefulContext": [
     "Background info, links, references only if needed"
   ],
-  "tone": "Overall tone/sentiment of the conversation and any notable emotional signals"
+  "tone": "Overall tone/sentiment of the conversation and any notable emotional signals",
+  "suggestedCategory": "Work | School | Kindergarten | Family | Friends | Other"
 }
 
 Rules:
@@ -115,7 +117,16 @@ Risks:
 - Highlight any blockers, sources of confusion, potential delays, or misalignments.
 
 Tone:
-- Describe the overall sentiment (e.g. "Collaborative and upbeat", "Tense, with frustration from X about Y").`;
+- Describe the overall sentiment (e.g. "Collaborative and upbeat", "Tense, with frustration from X about Y").
+
+suggestedCategory:
+- Classify this conversation into ONE category based on its content and participants.
+- Work = professional, business, projects, clients, colleagues.
+- School = children's school related (parents groups, teacher comms, homework).
+- Kindergarten = daycare/kindergarten/gan related.
+- Family = family members, personal family matters.
+- Friends = social, personal, casual with friends.
+- Other = doesn't fit any above.`;
 
 /**
  * Format a message array into a transcript string for the LLM.
@@ -179,5 +190,6 @@ export function parseProviderResponse(raw: string): SummarizeOutput {
     risks: Array.isArray(parsed.risks) ? parsed.risks.map(String) : [],
     usefulContext: Array.isArray(parsed.usefulContext) ? parsed.usefulContext.map(String) : [],
     tone: String(parsed.tone ?? ''),
+    suggestedCategory: String(parsed.suggestedCategory ?? 'Other'),
   };
 }

@@ -127,6 +127,15 @@ async function runAutoSummarize(
           timeRange: [Math.min(...timestamps), Math.max(...timestamps)],
         });
 
+        // Auto-categorize: if chat has no category, use LLM suggestion
+        const VALID_CATEGORIES = new Set(['School', 'Kindergarten', 'Work', 'Family', 'Friends', 'Other']);
+        if (result.suggestedCategory && VALID_CATEGORIES.has(result.suggestedCategory)) {
+          const chat = allChats.find((c) => c.id === chatId);
+          if (chat && !chat.category) {
+            chatRepo.setCategory(chatId, result.suggestedCategory);
+          }
+        }
+
         mainWindow.webContents.send(IpcEvents.SUMMARIZE_PROGRESS, {
           chatId,
           status: 'complete',
