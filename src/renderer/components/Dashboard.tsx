@@ -27,19 +27,16 @@ export function Dashboard({ chats, connectionState, onNavigateToChat }: Props) {
   );
   const isConnected = connectionState.status === 'connected';
 
-  // Load summaries from the last 2 hours across all chats
+  // Load most recent summaries across all chats
   const [recentSummaries, setRecentSummaries] = useState<SummaryResult[]>([]);
-  const twoHoursAgo = Math.floor(Date.now() / 1000) - 2 * 3600;
 
   useEffect(() => {
     (async () => {
       const found: SummaryResult[] = [];
       for (const chat of chats.slice(0, 20)) {
-        const summaries = await api.summarize.list(chat.id, 3);
-        for (const s of summaries) {
-          if (s.createdAt > twoHoursAgo) {
-            found.push(s);
-          }
+        const summaries = await api.summarize.list(chat.id, 1);
+        if (summaries.length > 0) {
+          found.push(summaries[0]);
         }
       }
       found.sort((a, b) => b.createdAt - a.createdAt);
@@ -135,7 +132,7 @@ export function Dashboard({ chats, connectionState, onNavigateToChat }: Props) {
           {recentSummaries.length > 0 && (
             <span>
               {' \u00b7 '}
-              {recentSummaries.length} summar{recentSummaries.length !== 1 ? 'ies' : 'y'} in the last 2h
+              {recentSummaries.length} summar{recentSummaries.length !== 1 ? 'ies' : 'y'} generated
             </span>
           )}
           {allActionItems.length > 0 && (
@@ -226,7 +223,7 @@ export function Dashboard({ chats, connectionState, onNavigateToChat }: Props) {
             </div>
           ) : (
             <div style={{ color: 'var(--text-secondary)', fontSize: 13 }}>
-              No summaries in the last 2 hours. Summarize a chat to see highlights here.
+              No summaries yet. Select a chat and generate your first summary.
             </div>
           )}
         </div>
@@ -308,7 +305,7 @@ export function Dashboard({ chats, connectionState, onNavigateToChat }: Props) {
             </div>
           ) : (
             <div style={{ color: 'var(--text-secondary)', fontSize: 13 }}>
-              No action items in the last 2 hours. Summarize a chat to extract tasks.
+              No action items yet. Summarize a chat to extract tasks.
             </div>
           )}
         </div>
