@@ -26,99 +26,274 @@ const CATEGORY_COLORS: Record<string, string> = {
   Other: '#666',
 };
 
+const PRIORITY_COLORS: Record<string, { bg: string; fg: string }> = {
+  high: { bg: 'rgba(231, 76, 60, 0.15)', fg: '#e74c3c' },
+  medium: { bg: 'rgba(243, 156, 18, 0.15)', fg: '#f39c12' },
+  low: { bg: 'rgba(52, 152, 219, 0.15)', fg: '#3498db' },
+};
+
+// ── Types ─────────────────────────────────────────────────
+type ActionWithContext = { item: ActionItem; chatId: string; tldr: string };
+
+// ── Deduplication ─────────────────────────────────────────
+function dedup(items: ActionWithContext[]): ActionWithContext[] {
+  const seen = new Set<string>();
+  return items.filter((a) => {
+    const normalized = a.item.description
+      .toLowerCase()
+      .trim()
+      .replace(/\s+/g, ' ')
+      .slice(0, 80);
+    const key = `${a.chatId}::${normalized}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+// ── Expandable Action Item Card ───────────────────────────
+function ActionItemCard({
+  item,
+  chatId,
+  chatNameStr,
+  tldr,
+  onNavigateToChat,
+}: {
+  item: ActionItem;
+  chatId: string;
+  chatNameStr: string;
+  tldr: string;
+  onNavigateToChat: (id: string) => void;
+}) {
+  const [expanded, setExpanded] = useState(true);
+  const c = item.priority ? PRIORITY_COLORS[item.priority] || PRIORITY_COLORS.low : null;
+
+  return (
+    <div
+      style={{
+        background: 'rgba(255,255,255,0.02)',
+        border: '1px solid var(--border)',
+        borderRadius: 8,
+        padding: '10px 14px',
+        marginBottom: 8,
+      }}
+    >
+      {/* Header row */}
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 8,
+          marginBottom: 6,
+          fontSize: 12,
+          flexWrap: 'wrap',
+        }}
+      >
+        <span
+          style={{ color: 'var(--accent)', fontWeight: 600, cursor: 'pointer' }}
+          onClick={() => onNavigateToChat(chatId)}
+        >
+          [{chatNameStr}]
+        </span>
+        {item.assignee && item.assignee !== 'null' && item.assignee !== 'None' && (
+          <span style={{ color: '#9b59b6', fontWeight: 500 }}>@{item.assignee}</span>
+        )}
+        {c && (
+          <span
+            style={{
+              fontSize: 10,
+              fontWeight: 600,
+              padding: '1px 6px',
+              borderRadius: 4,
+              textTransform: 'uppercase',
+              letterSpacing: 0.5,
+              background: c.bg,
+              color: c.fg,
+            }}
+          >
+            {item.priority}
+          </span>
+        )}
+        {item.deadline && item.deadline !== 'null' && item.deadline !== 'None' && (
+          <span style={{ color: 'var(--text-secondary)', fontSize: 11 }}>
+            by {item.deadline}
+          </span>
+        )}
+        <span
+          style={{
+            marginLeft: 'auto',
+            cursor: 'pointer',
+            color: 'var(--text-secondary)',
+            fontSize: 14,
+            userSelect: 'none',
+            lineHeight: 1,
+          }}
+          onClick={() => setExpanded(!expanded)}
+          title={expanded ? 'Collapse' : 'Expand'}
+        >
+          {expanded ? '\u25B4' : '\u25BE'}
+        </span>
+      </div>
+
+      {/* Description — always visible */}
+      <div
+        style={{
+          fontSize: 13,
+          lineHeight: 1.6,
+          color: 'var(--text-primary)',
+          userSelect: 'text',
+        }}
+      >
+        {item.description}
+      </div>
+
+      {/* Context block — expanded by default */}
+      {expanded && tldr && (
+        <div
+          style={{
+            marginTop: 8,
+            fontSize: 12,
+            lineHeight: 1.5,
+            color: 'var(--text-secondary)',
+            background: 'rgba(255,255,255,0.03)',
+            padding: '8px 12px',
+            borderRadius: 6,
+            borderLeft: '2px solid var(--border)',
+            userSelect: 'text',
+          }}
+        >
+          {tldr}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Section Header with Clear All ─────────────────────────
+function SectionHeader({
+  title,
+  color,
+  count,
+  onClear,
+}: {
+  title: string;
+  color: string;
+  count: number;
+  onClear: () => void;
+}) {
+  return (
+    <div
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        marginBottom: 12,
+      }}
+    >
+      <h3
+        style={{
+          fontSize: 14,
+          fontWeight: 700,
+          color,
+          textTransform: 'uppercase',
+          letterSpacing: 0.5,
+          display: 'flex',
+          alignItems: 'center',
+          gap: 8,
+        }}
+      >
+        {title}
+        <span
+          style={{
+            fontSize: 11,
+            fontWeight: 500,
+            color: 'var(--text-secondary)',
+            textTransform: 'none',
+            letterSpacing: 0,
+          }}
+        >
+          ({count})
+        </span>
+      </h3>
+      <button
+        onClick={onClear}
+        style={{
+          background: 'transparent',
+          border: '1px solid var(--border)',
+          borderRadius: 6,
+          padding: '3px 10px',
+          fontSize: 11,
+          color: 'var(--text-secondary)',
+          cursor: 'pointer',
+          transition: 'all 0.15s ease',
+        }}
+      >
+        Clear All
+      </button>
+    </div>
+  );
+}
+
+// ── Main Dashboard ────────────────────────────────────────
 export function Dashboard({ chats, connectionState, onNavigateToChat, revision = 0 }: Props) {
   const api = useApi();
   const [recentSummaries, setRecentSummaries] = useState<SummaryResult[]>([]);
   const [summarizingChat, setSummarizingChat] = useState<string | null>(null);
+  const [clearedAt, setClearedAt] = useState(0);
   const refreshTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const totalMessages = chats.reduce((sum, c) => sum + c.messageCount, 0);
   const isConnected = connectionState.status === 'connected';
 
-  // Helper: find chat by id
+  const chatNameById = (id: string): string => chats.find((c) => c.id === id)?.name || 'Chat';
   const chatById = (id: string): Chat | undefined => chats.find((c) => c.id === id);
-  const chatName = (id: string): string => chatById(id)?.name || 'Chat';
 
-  // Load recent summaries from last 24h
+  // ── Data loading ────────────────────────────────────────
   const loadRecentSummaries = async () => {
     try {
       const since24h = Math.floor(Date.now() / 1000) - 86400;
       const summaries = await api.summarize.recent(since24h, 50);
       setRecentSummaries(summaries);
     } catch {
-      // Silently handle - may not have summaries yet
+      // Silently handle
     }
   };
 
-  // Initial load + refresh on revision changes
   useEffect(() => {
     loadRecentSummaries();
   }, [revision, chats.length]);
 
-  // Listen for auto-summarize complete events
   useEffect(() => {
-    const unsub = api.summarize.onAutoSummarizeComplete(() => {
-      loadRecentSummaries();
-    });
+    const unsub = api.summarize.onAutoSummarizeComplete(() => loadRecentSummaries());
     return unsub;
   }, [api]);
 
-  // Auto-refresh every 30 seconds
   useEffect(() => {
-    refreshTimerRef.current = setInterval(() => {
-      loadRecentSummaries();
-    }, 30_000);
+    refreshTimerRef.current = setInterval(() => loadRecentSummaries(), 30_000);
     return () => {
       if (refreshTimerRef.current) clearInterval(refreshTimerRef.current);
     };
   }, []);
 
-  // ── Derived data ──────────────────────────────────────────
+  // ── Derived data (filtered + deduplicated) ──────────────
+  const activeSummaries = recentSummaries.filter((s) => s.createdAt > clearedAt);
 
-  // All action items with their associated chat info and summary context
-  const allActionItemsWithChat: { item: ActionItem; chatId: string; tldr: string; tone: string }[] = recentSummaries.flatMap(
-    (s) => s.actionItems.map((item) => ({ item, chatId: s.chatId, tldr: s.tldr || s.summary, tone: s.tone }))
+  // Only high & medium confidence items
+  const allItems: ActionWithContext[] = activeSummaries.flatMap((s) =>
+    s.actionItems
+      .filter((item) => item.priority === 'high' || item.priority === 'medium')
+      .map((item) => ({ item, chatId: s.chatId, tldr: s.tldr || s.summary }))
   );
 
-  // Critical alerts: high-priority action items with context
-  const criticalAlerts = allActionItemsWithChat.filter((a) => a.item.priority === 'high');
+  const criticalAlerts = dedup(allItems.filter((a) => a.item.priority === 'high'));
+  const actionItems = dedup(allItems.filter((a) => a.item.priority === 'medium'));
 
-  // What people need from me: all expectedFromMe items with context
-  const expectedFromMe: { text: string; chatId: string; chatNameStr: string; tldr: string }[] =
-    recentSummaries.flatMap((s) =>
-      s.expectedFromMe.map((text) => ({
-        text,
-        chatId: s.chatId,
-        chatNameStr: chatName(s.chatId),
-        tldr: s.tldr || s.summary,
-      }))
-    );
-
-  // School & Kindergarten summaries
-  const schoolKindergartenSummaries = recentSummaries.filter((s) => {
+  const schoolKindergartenSummaries = activeSummaries.filter((s) => {
     const chat = chatById(s.chatId);
     return chat?.category === 'School' || chat?.category === 'Kindergarten';
   });
 
-  // This week: all action items sorted by priority
-  const sortedActionItems = [...allActionItemsWithChat].sort((a, b) => {
-    const prio = { high: 0, medium: 1, low: 2 };
-    const ap = a.item.priority ? prio[a.item.priority] : 3;
-    const bp = b.item.priority ? prio[b.item.priority] : 3;
-    return ap - bp;
-  });
-
-  const quickSummarize = async (chatId: string, hours: number) => {
-    setSummarizingChat(chatId);
-    const afterTimestamp = Math.floor(Date.now() / 1000) - hours * 3600;
-    try {
-      await api.summarize.run(chatId, afterTimestamp);
-      await loadRecentSummaries();
-    } finally {
-      setSummarizingChat(null);
-    }
-  };
-
+  // ── Helpers ──────────────────────────────────────────────
   const relativeTime = (ts: number): string => {
     if (!ts) return '';
     const diff = Math.floor(Date.now() / 1000) - ts;
@@ -136,93 +311,20 @@ export function Dashboard({ chats, connectionState, onNavigateToChat, revision =
     return 'Good evening';
   };
 
-  // ── Section renderers ─────────────────────────────────────
-
-  const renderPriorityBadge = (priority: string | null) => {
-    if (!priority) return null;
-    const colors: Record<string, { bg: string; fg: string }> = {
-      high: { bg: 'rgba(231, 76, 60, 0.15)', fg: '#e74c3c' },
-      medium: { bg: 'rgba(243, 156, 18, 0.15)', fg: '#f39c12' },
-      low: { bg: 'rgba(52, 152, 219, 0.15)', fg: '#3498db' },
-    };
-    const c = colors[priority] || colors.low;
-    return (
-      <span
-        style={{
-          fontSize: 10,
-          fontWeight: 600,
-          padding: '1px 6px',
-          borderRadius: 4,
-          marginRight: 4,
-          textTransform: 'uppercase',
-          letterSpacing: 0.5,
-          background: c.bg,
-          color: c.fg,
-        }}
-      >
-        {priority}
-      </span>
-    );
+  const quickSummarize = async (chatId: string, hours: number) => {
+    setSummarizingChat(chatId);
+    const afterTimestamp = Math.floor(Date.now() / 1000) - hours * 3600;
+    try {
+      await api.summarize.run(chatId, afterTimestamp);
+      await loadRecentSummaries();
+    } finally {
+      setSummarizingChat(null);
+    }
   };
 
-  const renderActionItem = (
-    item: ActionItem,
-    chatId: string,
-    idx: number,
-    showChat = true
-  ) => (
-    <div
-      key={idx}
-      style={{
-        display: 'flex',
-        alignItems: 'flex-start',
-        gap: 8,
-        marginBottom: 10,
-        fontSize: 13,
-      }}
-    >
-      <div
-        style={{
-          width: 18,
-          height: 18,
-          borderRadius: 4,
-          border: '1.5px solid var(--border)',
-          flexShrink: 0,
-          marginTop: 1,
-        }}
-      />
-      <div style={{ userSelect: 'text', lineHeight: 1.5 }}>
-        {showChat && (
-          <span
-            style={{
-              fontSize: 11,
-              color: 'var(--accent)',
-              fontWeight: 500,
-              cursor: 'pointer',
-              marginRight: 6,
-            }}
-            onClick={() => onNavigateToChat(chatId)}
-          >
-            [{chatName(chatId)}]
-          </span>
-        )}
-        {item.assignee && item.assignee !== 'null' && (
-          <span style={{ color: '#9b59b6', fontWeight: 500 }}>
-            @{item.assignee}{' '}
-          </span>
-        )}
-        {renderPriorityBadge(item.priority)}
-        <span style={{ color: 'var(--text-primary)' }}>{item.description}</span>
-        {item.deadline && item.deadline !== 'null' && (
-          <span style={{ color: 'var(--text-secondary)', fontSize: 11 }}>
-            {' '}
-            &rarr; by {item.deadline}
-          </span>
-        )}
-      </div>
-    </div>
-  );
+  const handleClearAll = () => setClearedAt(Math.floor(Date.now() / 1000));
 
+  // ── Render ──────────────────────────────────────────────
   return (
     <div style={{ flex: 1, overflowY: 'auto', padding: 32 }}>
       {/* Greeting */}
@@ -265,7 +367,7 @@ export function Dashboard({ chats, connectionState, onNavigateToChat, revision =
         </div>
       </div>
 
-      {/* ── a) Critical Alerts ────────────────────────────────── */}
+      {/* ── Critical Alerts (high priority only) ─────────── */}
       {criticalAlerts.length > 0 && (
         <div
           style={{
@@ -277,111 +379,56 @@ export function Dashboard({ chats, connectionState, onNavigateToChat, revision =
             marginBottom: 20,
           }}
         >
-          <h3
-            style={{
-              fontSize: 14,
-              fontWeight: 700,
-              color: '#e74c3c',
-              marginBottom: 12,
-              textTransform: 'uppercase',
-              letterSpacing: 0.5,
-            }}
-          >
-            Critical Alerts
-          </h3>
+          <SectionHeader
+            title="Critical Alerts"
+            color="#e74c3c"
+            count={criticalAlerts.length}
+            onClear={handleClearAll}
+          />
           {criticalAlerts.map((a, i) => (
-            <div key={i} style={{ marginBottom: i < criticalAlerts.length - 1 ? 14 : 0 }}>
-              {/* Context: what happened */}
-              <div
-                style={{
-                  fontSize: 12,
-                  color: 'var(--text-secondary)',
-                  marginBottom: 6,
-                  lineHeight: 1.5,
-                  background: 'rgba(231, 76, 60, 0.06)',
-                  padding: '6px 10px',
-                  borderRadius: 6,
-                }}
-              >
-                <span
-                  style={{ color: 'var(--accent)', fontWeight: 500, cursor: 'pointer' }}
-                  onClick={() => onNavigateToChat(a.chatId)}
-                >
-                  {chatName(a.chatId)}
-                </span>
-                {a.tldr && (
-                  <span> — {a.tldr.length > 150 ? a.tldr.slice(0, 150) + '...' : a.tldr}</span>
-                )}
-              </div>
-              {/* The action item */}
-              {renderActionItem(a.item, a.chatId, i, false)}
-            </div>
+            <ActionItemCard
+              key={`critical-${i}`}
+              item={a.item}
+              chatId={a.chatId}
+              chatNameStr={chatNameById(a.chatId)}
+              tldr={a.tldr}
+              onNavigateToChat={onNavigateToChat}
+            />
           ))}
         </div>
       )}
 
-      {/* ── b) What People Need From Me ───────────────────────── */}
-      {expectedFromMe.length > 0 && (
+      {/* ── Action Items (medium priority) ────────────────── */}
+      {actionItems.length > 0 && (
         <div
           style={{
             background: 'var(--bg-secondary)',
-            border: '1px solid rgba(243, 156, 18, 0.3)',
-            borderLeft: '4px solid #f39c12',
+            border: '1px solid var(--border)',
             borderRadius: 10,
             padding: '16px 20px',
             marginBottom: 20,
           }}
         >
-          <h3
-            style={{
-              fontSize: 14,
-              fontWeight: 700,
-              color: '#f39c12',
-              marginBottom: 12,
-            }}
-          >
-            What People Need From Me
-          </h3>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            {expectedFromMe.map((item, i) => (
-              <div
-                key={i}
-                style={{
-                  display: 'flex',
-                  alignItems: 'flex-start',
-                  gap: 8,
-                  fontSize: 13,
-                  lineHeight: 1.5,
-                }}
-              >
-                <span style={{ color: '#f39c12', flexShrink: 0 }}>{'\u25B8'}</span>
-                <div style={{ userSelect: 'text', flex: 1 }}>
-                  <span
-                    style={{
-                      fontSize: 11,
-                      color: 'var(--accent)',
-                      fontWeight: 500,
-                      cursor: 'pointer',
-                      marginRight: 6,
-                    }}
-                    onClick={() => onNavigateToChat(item.chatId)}
-                  >
-                    [{item.chatNameStr}]
-                  </span>
-                  <span style={{ color: 'var(--text-primary)' }}>{item.text}</span>
-                  {item.tldr && (
-                    <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 3, fontStyle: 'italic' }}>
-                      Context: {item.tldr.length > 120 ? item.tldr.slice(0, 120) + '...' : item.tldr}
-                    </div>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
+          <SectionHeader
+            title="Action Items"
+            color="var(--text-primary)"
+            count={actionItems.length}
+            onClear={handleClearAll}
+          />
+          {actionItems.map((a, i) => (
+            <ActionItemCard
+              key={`action-${i}`}
+              item={a.item}
+              chatId={a.chatId}
+              chatNameStr={chatNameById(a.chatId)}
+              tldr={a.tldr}
+              onNavigateToChat={onNavigateToChat}
+            />
+          ))}
         </div>
       )}
 
-      {/* ── c) School & Kindergarten ──────────────────────────── */}
+      {/* ── School & Kindergarten ─────────────────────────── */}
       {schoolKindergartenSummaries.length > 0 && (
         <div
           style={{
@@ -428,7 +475,7 @@ export function Dashboard({ chats, connectionState, onNavigateToChat, revision =
                       }}
                       onClick={() => onNavigateToChat(s.chatId)}
                     >
-                      {chatName(s.chatId)}
+                      {chatNameById(s.chatId)}
                     </span>
                     {chat?.category && (
                       <span
@@ -445,7 +492,6 @@ export function Dashboard({ chats, connectionState, onNavigateToChat, revision =
                       </span>
                     )}
                   </div>
-                  {/* TL;DR */}
                   {s.tldr && (
                     <div
                       style={{
@@ -459,12 +505,20 @@ export function Dashboard({ chats, connectionState, onNavigateToChat, revision =
                       {s.tldr}
                     </div>
                   )}
-                  {/* Action items for this summary */}
                   {s.actionItems.length > 0 && (
                     <div style={{ marginTop: 4 }}>
-                      {s.actionItems.map((item, j) =>
-                        renderActionItem(item, s.chatId, j, false)
-                      )}
+                      {s.actionItems
+                        .filter((item) => item.priority === 'high' || item.priority === 'medium')
+                        .map((item, j) => (
+                          <ActionItemCard
+                            key={j}
+                            item={item}
+                            chatId={s.chatId}
+                            chatNameStr={chatNameById(s.chatId)}
+                            tldr=""
+                            onNavigateToChat={onNavigateToChat}
+                          />
+                        ))}
                     </div>
                   )}
                 </div>
@@ -474,39 +528,7 @@ export function Dashboard({ chats, connectionState, onNavigateToChat, revision =
         </div>
       )}
 
-      {/* ── d) This Week ──────────────────────────────────────── */}
-      {sortedActionItems.length > 0 && (
-        <div
-          style={{
-            background: 'var(--bg-secondary)',
-            border: '1px solid var(--border)',
-            borderRadius: 10,
-            padding: '16px 20px',
-            marginBottom: 20,
-          }}
-        >
-          <h3
-            style={{
-              fontSize: 14,
-              fontWeight: 700,
-              color: 'var(--text-primary)',
-              marginBottom: 12,
-            }}
-          >
-            This Week
-          </h3>
-          {sortedActionItems.slice(0, 15).map((a, i) =>
-            renderActionItem(a.item, a.chatId, i, true)
-          )}
-          {sortedActionItems.length > 15 && (
-            <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 8 }}>
-              +{sortedActionItems.length - 15} more action items
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* ── e) Quick Summarize ────────────────────────────────── */}
+      {/* ── Quick Summarize ───────────────────────────────── */}
       <div style={{ marginBottom: 32 }}>
         <h3
           style={{

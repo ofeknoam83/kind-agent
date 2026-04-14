@@ -98,6 +98,11 @@ Action items — STRICT rules:
 - Do NOT infer tasks that were never discussed. If no one asked for it, it's not an action item.
 - When in doubt, leave it out. Fewer accurate items are far better than hallucinated ones.
 - Attribute to specific people when possible. Set priority based on urgency/importance. Use null if unclear.
+- Descriptions MUST be specific and self-contained. The reader should understand what needs to be done WITHOUT reading the full conversation. Include WHO needs to do it, WHAT exactly, and WHY.
+  BAD: "Review flow changes"
+  GOOD: "Alexandra needs to review the new checkout flow — there are bugs with the clickable upgrade button and items not being added to cart"
+  BAD: "Schedule a meeting"
+  GOOD: "Yoav to schedule a follow-up call with Asi this week to discuss growth goals and bottlenecks"
 
 expectedFromMe — STRICT rules:
 - "Me" is the person READING this summary (the app user). They may or may not be a participant in the conversation.
