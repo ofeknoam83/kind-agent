@@ -1,5 +1,7 @@
 import { app, BrowserWindow, session } from 'electron';
 import path from 'node:path';
+import { closeDb } from '../db/connection';
+import { registerIpcHandlers } from './ipc-handlers';
 
 // Enforce single instance — WhatsApp only allows one connection per device.
 const gotLock = app.requestSingleInstanceLock();
@@ -63,10 +65,8 @@ function createWindow(): void {
     return { action: 'deny' };
   });
 
-  // Register IPC handlers — wrapped in try/catch so a DB error
-  // doesn't prevent the window from loading.
+  // Register IPC handlers
   try {
-    const { registerIpcHandlers } = require('./ipc-handlers');
     registerIpcHandlers(mainWindow);
   } catch (err) {
     console.error('Failed to register IPC handlers:', err);
@@ -88,10 +88,7 @@ function createWindow(): void {
 app.whenReady().then(createWindow);
 
 app.on('window-all-closed', () => {
-  try {
-    const { closeDb } = require('../db/connection');
-    closeDb();
-  } catch { /* ignore */ }
+  closeDb();
   app.quit();
 });
 
