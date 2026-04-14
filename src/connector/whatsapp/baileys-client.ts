@@ -119,9 +119,16 @@ export class BaileysClient extends EventEmitter<BaileysClientEvents> {
     socket.ev.on('messaging-history.set', (event) => {
       console.log(`[BAILEYS] History sync: ${event.chats.length} chats, ${event.contacts.length} contacts, ${event.messages.length} messages`);
 
+      // Debug contact structure
+      if (event.contacts.length > 0) {
+        console.log(`[BAILEYS] Contact keys: ${Object.keys(event.contacts[0]).join(', ')}`);
+        console.log(`[BAILEYS] Contact sample: ${JSON.stringify(event.contacts[0]).slice(0, 300)}`);
+      }
+
       // Build a contact name lookup from the contacts array
       for (const contact of event.contacts) {
-        const cName = contact.name || (contact as any).notify;
+        const c = contact as any;
+        const cName = c.name || c.notify || c.pushName || c.verifiedName;
         if (contact.id && cName) {
           this.contactNames.set(contact.id, cName);
         }
@@ -149,27 +156,32 @@ export class BaileysClient extends EventEmitter<BaileysClientEvents> {
         }
       }
 
+      // Collect group IDs to fetch metadata for names
+      const groupIds: string[] = [];
+
       for (const chat of event.chats) {
         if (chat.id) {
+          const c = chat as any;
           const isGroup = chat.id.endsWith('@g.us');
-          // Try multiple name fields — Baileys stores group names inconsistently
-          let name = chat.name
-            || (chat as any).subject
-            || (chat as any).pushName
-            || (chat as any).formattedTitle;
-          if (!name && !isGroup) {
+
+          // Use contact name for 1:1 chats
+          let name: string | undefined;
+          if (!isGroup) {
             name = this.contactNames.get(chat.id);
           }
           if (!name) {
             name = isGroup ? 'Group' : chat.id.split('@')[0].replace(/^(\d{1,3})(\d+)/, '+$1 $2');
           }
 
-          // Use conversationTimestamp — this reflects ACTUAL last activity
-          // even for chats where we can't extract text messages
-          const convTs = chat.conversationTimestamp
-            ? typeof chat.conversationTimestamp === 'number'
-              ? chat.conversationTimestamp
-              : Number(chat.conversationTimestamp)
+          if (isGroup) {
+            groupIds.push(chat.id);
+          }
+
+          // Use lastMessageRecvTimestamp (the actual field in Baileys v7)
+          const lastTs = c.lastMessageRecvTimestamp
+            ? typeof c.lastMessageRecvTimestamp === 'number'
+              ? c.lastMessageRecvTimestamp
+              : Number(c.lastMessageRecvTimestamp)
             : 0;
 
           this.emit('messages', [{
@@ -178,10 +190,43 @@ export class BaileysClient extends EventEmitter<BaileysClientEvents> {
             senderJid: 'chat-meta',
             senderName: name,
             body: '',
-            timestamp: convTs || Math.floor(Date.now() / 1000),
+            timestamp: lastTs || Math.floor(Date.now() / 1000),
             fromMe: false,
           }]);
         }
+      }
+
+      // Fetch group names via groupMetadata (not in history sync data)
+      if (socket && groupIds.length > 0) {
+        (async () => {
+          console.log(`[BAILEYS] Fetching metadata for ${groupIds.length} groups...`);
+          const batchSize = 5;
+          for (let i = 0; i < groupIds.length; i += batchSize) {
+            const batch = groupIds.slice(i, i + batchSize);
+            for (const gid of batch) {
+              try {
+                const meta = await socket.groupMetadata(gid);
+                if (meta.subject) {
+                  this.emit('messages', [{
+                    id: `group-meta-${gid}-${Date.now()}`,
+                    chatId: gid,
+                    senderJid: 'chat-meta',
+                    senderName: meta.subject,
+                    body: '',
+                    timestamp: Math.floor(Date.now() / 1000),
+                    fromMe: false,
+                  }]);
+                }
+              } catch {
+                // Can fail for old/left groups
+              }
+            }
+            if (i + batchSize < groupIds.length) {
+              await new Promise((r) => setTimeout(r, 500));
+            }
+          }
+          console.log(`[BAILEYS] Group metadata fetch complete`);
+        })().catch((err) => console.error('[BAILEYS] Group metadata fetch error:', err));
       }
     });
 
