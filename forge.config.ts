@@ -7,10 +7,7 @@ const config: ForgeConfig = {
   packagerConfig: {
     name: 'WhatsApp Summarizer',
     appBundleId: 'com.local.whatsapp-summarizer',
-    icon: './resources/icon',
     asar: true,
-    osxSign: {},
-    extraResource: ['./resources'],
   },
   makers: [
     new MakerZIP({}, ['darwin']),
