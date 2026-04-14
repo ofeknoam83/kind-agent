@@ -1,4 +1,5 @@
 import { defineConfig } from 'vite';
+import { builtinModules } from 'node:module';
 
 export default defineConfig({
   resolve: {
@@ -6,12 +7,28 @@ export default defineConfig({
   },
   build: {
     rollupOptions: {
+      // Externalize everything that shouldn't be bundled:
+      // - Node builtins (fs, path, crypto, etc.)
+      // - Native addons (better-sqlite3, sharp)
+      // - Baileys and all its deps (they use native/optional modules)
       external: [
+        ...builtinModules,
+        ...builtinModules.map((m) => `node:${m}`),
+        'electron',
         'better-sqlite3',
         'electron-store',
-        'sharp',
-        'link-preview-js',
+        '@whiskeysockets/baileys',
         '@hapi/boom',
+        '@cacheable/node-cache',
+        'async-mutex',
+        'axios',
+        'libsignal',
+        'link-preview-js',
+        'long',
+        'pino',
+        'qrcode',
+        'sharp',
+        'ws',
       ],
     },
   },
