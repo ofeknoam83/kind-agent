@@ -22,6 +22,7 @@ export class BaileysClient extends EventEmitter<BaileysClientEvents> {
   private state: ConnectionState = { status: 'disconnected' };
   private phoneNumber: string | null = null;
   private pairingCodeRequested = false;
+  private contactNames = new Map<string, string>();
 
   getState(): ConnectionState {
     return this.state;
@@ -119,12 +120,10 @@ export class BaileysClient extends EventEmitter<BaileysClientEvents> {
       console.log(`[BAILEYS] History sync: ${event.chats.length} chats, ${event.contacts.length} contacts, ${event.messages.length} messages`);
 
       // Build a contact name lookup from the contacts array
-      const contactNames = new Map<string, string>();
       for (const contact of event.contacts) {
-        // Prefer saved name > notify (profile) name
         const cName = contact.name || (contact as any).notify;
         if (contact.id && cName) {
-          contactNames.set(contact.id, cName);
+          this.contactNames.set(contact.id, cName);
         }
       }
 
@@ -144,7 +143,7 @@ export class BaileysClient extends EventEmitter<BaileysClientEvents> {
           const isGroup = chat.id.endsWith('@g.us');
           let name = chat.name;
           if (!name && !isGroup) {
-            name = contactNames.get(chat.id);
+            name = this.contactNames.get(chat.id);
           }
           if (!name) {
             // Last resort: format the phone number or show "Group"
@@ -210,7 +209,10 @@ export class BaileysClient extends EventEmitter<BaileysClientEvents> {
       id: msg.key.id ?? `${Date.now()}-${Math.random()}`,
       chatId,
       senderJid: msg.key.fromMe ? 'me' : (msg.key.participant ?? chatId),
-      senderName: msg.pushName ?? 'Unknown',
+      senderName: msg.pushName
+        || this.contactNames.get(msg.key.participant ?? chatId)
+        || this.contactNames.get(chatId)
+        || chatId.split('@')[0],
       body,
       timestamp: msg.messageTimestamp
         ? typeof msg.messageTimestamp === 'number'
