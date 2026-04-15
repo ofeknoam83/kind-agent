@@ -87,7 +87,7 @@ export function App() {
               }}
             >
               <span>{item.icon}</span>
-              <span style={{ fontSize: 9, fontWeight: 500 }}>{item.label}</span>
+              <span style={{ fontSize: 10, fontWeight: 500, letterSpacing: 0.2 }}>{item.label}</span>
             </button>
           ))}
 
